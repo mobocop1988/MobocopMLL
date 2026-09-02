@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mobocop's Master List of Lists</title>
+  
+  <!-- Load External Data Store -->
+  <script src="lists.js"></script>
+
+  <style>
+    :root {
+      --bg-overlay: rgba(10, 15, 29, 0.82);
+      --card-bg: rgba(23, 32, 54, 0.88);
+      --card-border: rgba(255, 255, 255, 0.12);
+      --accent: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --lime-featured: #a3e635;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      background-color: #0b0f19;
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      background-repeat: no-repeat;
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3rem 1.5rem 5rem 1.5rem;
+      transition: background-image 0.3s ease-in-out;
+    }
+
+    /* Overall Title */
+    h1.main-title {
+      font-size: 2.75rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      text-align: center;
+      margin-bottom: 2rem;
+      text-shadow: 0 4px 16px rgba(0, 0, 0, 0.8);
+      cursor: default;
+    }
+
+    /* Secret Admin Trigger */
+    .admin-trigger {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      background: transparent;
+      border: none;
+      color: rgba(255, 255, 255, 0.15);
+      font-size: 1.25rem;
+      cursor: pointer;
+      transition: color 0.2s ease, transform 0.2s ease;
+      z-index: 100;
+    }
+
+    .admin-trigger:hover {
+      color: var(--accent);
+      transform: rotate(45deg);
+    }
+
+    /* Admin Action Panel */
+    .admin-panel {
+      display: none;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 2.5rem;
+      width: 100%;
+      max-width: 900px;
+      flex-direction: column;
+      gap: 0.75rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    .admin-panel.active {
+      display: flex;
+    }
+
+    .admin-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      width: 100%;
+    }
+
+    .admin-row input[type="text"] {
+      flex: 1;
+      min-width: 260px;
+      padding: 0.6rem 0.8rem;
+      background: rgba(11, 15, 25, 0.85);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      color: var(--text-main);
+      font-size: 0.9rem;
+    }
+
+    button.btn {
+      padding: 0.6rem 1.1rem;
+      border: none;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #0b0f19;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    button.btn:hover {
+      background: var(--accent-hover);
+    }
+
+    button.btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+    }
+
+    button.btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    button.btn-active {
+      background: var(--lime-featured) !important;
+      color: #0b0f19 !important;
+    }
+
+    /* Layout Wrapper */
+    .content-wrapper {
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    /* Top-Center Featured List */
+    .featured-container {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+
+    .list-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+
+    .featured-card {
+      max-width: 440px;
+      border: 2px solid var(--lime-featured);
+      box-shadow: 0 0 25px rgba(163, 230, 53, 0.25), 0 10px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    .list-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .list-subject {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .featured-card .list-subject {
+      color: var(--lime-featured);
+    }
+
+    .delete-btn {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.3rem;
+      line-height: 1;
+    }
+
+    .delete-btn:hover {
+      color: #ef4444;
+    }
+
+    body.admin-mode .delete-btn {
+      display: block;
+    }
+
+    .top5-items {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      flex: 1;
+    }
+
+    .top5-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: rgba(11, 15, 25, 0.6);
+      padding: 0.55rem 0.8rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+
+    .rank-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #0b0f19;
+      font-weight: 700;
+      font-size: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    .featured-card .rank-badge {
+      background: var(--lime-featured);
+    }
+
+    .list-footer {
+      margin-top: 1rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: right;
+    }
+
+    .lists-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.75rem;
+      width: 100%;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(4px);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: #172036;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 90%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .modal-content input {
+      padding: 0.6rem 0.8rem;
+      background: rgba(11, 15, 25, 0.85);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      color: var(--text-main);
+      font-size: 0.9rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1 class="main-title">Mobocop's Master List of Lists</h1>
+
+  <!-- Admin Panel -->
+  <div class="admin-panel" id="adminPanel">
+    <!-- Background Manager -->
+    <div class="admin-row">
+      <input type="text" id="bgUrlInput" placeholder="Enter new background image URL...">
+      <button class="btn" id="setBgBtn">Update Background</button>
+      <button class="btn btn-secondary" id="resetBgBtn">Reset Background</button>
+    </div>
+    <!-- List & File Sync Actions -->
+    <div class="admin-row" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.75rem;">
+      <button class="btn" id="openCustomModalBtn">➕ Create New Top 5 List</button>
+      <button class="btn btn-secondary" id="linkDataFileBtn" title="Select lists.js once to enable direct writing">🔗 Link 'lists.js' (Auto-Write)</button>
+      <button class="btn btn-secondary" id="downloadDataBtn" title="Save updated lists.js file">📥 Download lists.js</button>
+      <button class="btn btn-secondary" id="logoutAdminBtn" style="margin-left: auto;">Lock Admin</button>
+    </div>
+  </div>
+
+  <div class="content-wrapper">
+    <div class="featured-container" id="featuredContainer"></div>
+    <div class="lists-grid" id="listsGrid"></div>
+  </div>
+
+  <button class="admin-trigger" id="adminTriggerBtn" title="Admin Login">⚙</button>
+
+  <!-- Modal for Creating Lists -->
+  <div class="modal" id="customModal">
+    <div class="modal-content">
+      <h3 style="color: var(--accent);">Create New Top 5 List</h3>
+      <input type="text" id="customSubject" placeholder="Subject / Category">
+      <input type="text" id="item1" placeholder="1. First item">
+      <input type="text" id="item2" placeholder="2. Second item">
+      <input type="text" id="item3" placeholder="3. Third item">
+      <input type="text" id="item4" placeholder="4. Fourth item">
+      <input type="text" id="item5" placeholder="5. Fifth item">
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="closeModalBtn">Cancel</button>
+        <button class="btn" id="saveCustomListBtn">Save List</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const MONTH_DAY_YEAR = "10191988";
+    
+    // Read from external lists.js file or fallback
+    let dataStore = window.MOBOCOP_DATA || { background: null, lists: [] };
+    let isAdmin = false;
+    let fileHandle = null;
+
+    function getFormattedCurrentDate() {
+      const now = new Date();
+      const day = now.getDate();
+      const month = now.toLocaleString("en-GB", { month: "long" });
+      const year = now.getFullYear();
+      return `${day} ${month} ${year}`;
+    }
+
+    function applyBackground(url) {
+      if (url) {
+        document.body.style.backgroundImage = `linear-gradient(var(--bg-overlay), var(--bg-overlay)), url('${url}')`;
+        dataStore.background = url;
+      } else {
+        document.body.style.backgroundImage = "";
+        dataStore.background = null;
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      if (dataStore.background) {
+        applyBackground(dataStore.background);
+      }
+      renderAllLists();
+    });
+
+    function renderAllLists() {
+      const featuredContainer = document.getElementById("featuredContainer");
+      const grid = document.getElementById("listsGrid");
+
+      featuredContainer.innerHTML = "";
+      grid.innerHTML = "";
+
+      if (!dataStore.lists || dataStore.lists.length === 0) return;
+
+      // Top-Center Featured Card
+      const featuredCard = createCardElement(dataStore.lists[0], 0, true);
+      featuredContainer.appendChild(featuredCard);
+
+      // Remaining Cards
+      for (let i = 1; i < dataStore.lists.length; i++) {
+        const card = createCardElement(dataStore.lists[i], i, false);
+        grid.appendChild(card);
+      }
+    }
+
+    function createCardElement(listData, index, isFeatured) {
+      const card = document.createElement("div");
+      card.className = isFeatured ? "list-card featured-card" : "list-card";
+
+      const itemsHtml = listData.items.map((item, i) => `
+        <li class="top5-item">
+          <span class="rank-badge">${i + 1}</span>
+          <span>${item}</span>
+        </li>
+      `).join("");
+
+      card.innerHTML = `
+        <div class="list-card-header">
+          <span class="list-subject">${listData.subject}</span>
+          <button class="delete-btn" onclick="deleteList(${index})" title="Delete List">&times;</button>
+        </div>
+        <ul class="top5-items">
+          ${itemsHtml}
+        </ul>
+        <div class="list-footer">
+          ${listData.dateAdded || "Added Recently"}
+        </div>
+      `;
+
+      return card;
+    }
+
+    // Generate formatted content for lists.js
+    function getSerializedDataFileContent() {
+      return `/* ==========================================================================\n   MOBOCOP'S MASTER LIST OF LISTS - PERSISTENT DATA STORE\n   ========================================================================== */\nwindow.MOBOCOP_DATA = ${JSON.stringify(dataStore, null, 2)};\n`;
+    }
+
+    // Direct File System Write to lists.js
+    async function syncDataFile() {
+      if (!fileHandle) return;
+      try {
+        const fileContent = getSerializedDataFileContent();
+        const writable = await fileHandle.createWritable();
+        await writable.write(fileContent);
+        await writable.close();
+      } catch (err) {
+        console.warn("Direct file sync failed:", err);
+      }
+    }
+
+    // Link lists.js File Handle
+    document.getElementById("linkDataFileBtn").addEventListener("click", async () => {
+      if (!window.showOpenFilePicker) {
+        alert("Direct write is not supported in this browser. Use the 'Download lists.js' button.");
+        return;
+      }
+      try {
+        [fileHandle] = await window.showOpenFilePicker({
+          types: [{ description: "JavaScript Data File", accept: { "text/javascript": [".js"] } }]
+        });
+        const btn = document.getElementById("linkDataFileBtn");
+        btn.textContent = "✅ lists.js Linked (Live Syncing)";
+        btn.classList.add("btn-active");
+        syncDataFile();
+      } catch (err) {
+        console.log("File link cancelled.");
+      }
+    });
+
+    // Admin Authentication Handlers
+    const adminTriggerBtn = document.getElementById("adminTriggerBtn");
+    const adminPanel = document.getElementById("adminPanel");
+    const logoutAdminBtn = document.getElementById("logoutAdminBtn");
+
+    adminTriggerBtn.addEventListener("click", () => {
+      if (!isAdmin) {
+        const pass = prompt("Enter Admin Passcode:");
+        if (pass === MONTH_DAY_YEAR) {
+          isAdmin = true;
+          document.body.classList.add("admin-mode");
+          adminPanel.classList.add("active");
+          adminTriggerBtn.style.display = "none";
+        } else if (pass !== null) {
+          alert("Incorrect passcode.");
+        }
+      }
+    });
+
+    logoutAdminBtn.addEventListener("click", () => {
+      isAdmin = false;
+      document.body.classList.remove("admin-mode");
+      adminPanel.classList.remove("active");
+      adminTriggerBtn.style.display = "block";
+    });
+
+    // Background Handlers
+    document.getElementById("setBgBtn").addEventListener("click", () => {
+      if (!isAdmin) return;
+      const url = document.getElementById("bgUrlInput").value.trim();
+      if (url) {
+        applyBackground(url);
+        document.getElementById("bgUrlInput").value = "";
+        syncDataFile();
+      }
+    });
+
+    document.getElementById("resetBgBtn").addEventListener("click", () => {
+      if (!isAdmin) return;
+      applyBackground(null);
+      syncDataFile();
+    });
+
+    // Modal & List Add Handlers
+    const modal = document.getElementById("customModal");
+    document.getElementById("openCustomModalBtn").addEventListener("click", () => {
+      if (!isAdmin) return;
+      modal.style.display = "flex";
+      document.getElementById("customSubject").focus();
+    });
+
+    document.getElementById("closeModalBtn").addEventListener("click", () => {
+      modal.style.display = "none";
+    });
+
+    document.getElementById("saveCustomListBtn").addEventListener("click", () => {
+      if (!isAdmin) return;
+      const subject = document.getElementById("customSubject").value.trim() || "Untitled List";
+      const items = [
+        document.getElementById("item1").value.trim() || "Item 1",
+        document.getElementById("item2").value.trim() || "Item 2",
+        document.getElementById("item3").value.trim() || "Item 3",
+        document.getElementById("item4").value.trim() || "Item 4",
+        document.getElementById("item5").value.trim() || "Item 5"
+      ];
+
+      dataStore.lists.unshift({
+        subject: subject,
+        items: items,
+        dateAdded: getFormattedCurrentDate()
+      });
+
+      renderAllLists();
+      syncDataFile();
+
+      document.getElementById("customSubject").value = "";
+      for (let i = 1; i <= 5; i++) document.getElementById(`item${i}`).value = "";
+      modal.style.display = "none";
+    });
+
+    window.deleteList = function(index) {
+      if (!isAdmin) return;
+      if (confirm(`Delete "${dataStore.lists[index].subject}"?`)) {
+        dataStore.lists.splice(index, 1);
+        renderAllLists();
+        syncDataFile();
+      }
+    };
+
+    // Manual Download Backup
+    document.getElementById("downloadDataBtn").addEventListener("click", () => {
+      if (!isAdmin) return;
+      const fileContent = getSerializedDataFileContent();
+      const blob = new Blob([fileContent], { type: "text/javascript" });
+      const downloadLink = document.createElement("a");
+      downloadLink.href = URL.createObjectURL(blob);
+      downloadLink.download = "lists.js";
+      downloadLink.click();
+    });
+  </script>
+</body>
+</html>
