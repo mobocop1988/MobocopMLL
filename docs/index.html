@@ -10,6 +10,7 @@
 
   <style>
     :root {
+      --default-bg: url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1920&q=80');
       --bg-overlay: rgba(10, 15, 29, 0.82);
       --card-bg: rgba(23, 32, 54, 0.88);
       --card-border: rgba(255, 255, 255, 0.12);
@@ -30,6 +31,7 @@
     body {
       min-height: 100vh;
       background-color: #0b0f19;
+      background-image: linear-gradient(var(--bg-overlay), var(--bg-overlay)), var(--default-bg);
       background-size: cover;
       background-position: center;
       background-attachment: fixed;
@@ -52,23 +54,29 @@
       cursor: default;
     }
 
-    /* Discreet Admin Trigger */
+    /* Admin Trigger Gear Icon */
     .admin-trigger {
       position: fixed;
       bottom: 1rem;
       right: 1rem;
-      background: transparent;
-      border: none;
-      color: rgba(255, 255, 255, 0.25);
-      font-size: 1.5rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 50%;
+      color: var(--text-muted);
+      font-size: 1.35rem;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
-      transition: color 0.2s ease, transform 0.2s ease;
+      transition: all 0.2s ease;
       z-index: 1000;
-      padding: 0.5rem;
     }
 
     .admin-trigger:hover {
       color: var(--accent);
+      border-color: var(--accent);
       transform: rotate(45deg);
     }
 
@@ -278,7 +286,7 @@
       backdrop-filter: blur(4px);
       justify-content: center;
       align-items: center;
-      z-index: 1000;
+      z-index: 2000;
     }
 
     .modal-content {
@@ -319,8 +327,8 @@
     <!-- Background Image Field -->
     <div class="admin-row">
       <input type="text" id="bgUrlInput" placeholder="Enter new background image URL...">
-      <button class="btn" id="setBgBtn">Update Background</button>
-      <button class="btn btn-secondary" id="resetBgBtn">Reset</button>
+      <button class="btn" id="setBgBtn">Update & Save Background</button>
+      <button class="btn btn-secondary" id="resetBgBtn">Reset to Default</button>
     </div>
 
     <!-- Actions & Status -->
@@ -343,7 +351,7 @@
   <div class="modal" id="customModal">
     <div class="modal-content">
       <h3 style="color: var(--accent);">Create New Top 5 List</h3>
-      <input type="text" id="customSubject" placeholder="Subject / Category (e.g. Favorite Movies)">
+      <input type="text" id="customSubject" placeholder="Subject / Category (e.g. Favorite Sci-Fi Movies)">
       <input type="text" id="item1" placeholder="1. First item">
       <input type="text" id="item2" placeholder="2. Second item">
       <input type="text" id="item3" placeholder="3. Third item">
@@ -364,9 +372,8 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvem1mYm5laWFzbW54YmZ0bHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzAzMjUsImV4cCI6MjEwMzk0NjMyNX0.-Z6w_lYZ9kmRtUWLK93XHP1aRUEd0NlEYM0qLvZWtNw";
     const ADMIN_PASSCODE = "1234";
 
-    // Safe initialization avoiding global scope collision
     let dbClient = null;
-    if (window.supabase && SUPABASE_URL !== "YOUR_SUPABASE_PROJECT_URL") {
+    if (window.supabase && SUPABASE_URL.startsWith("http")) {
       dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     }
 
@@ -382,10 +389,10 @@
     }
 
     function applyBackground(url) {
-      if (url) {
+      if (url && url.trim() !== '') {
         document.body.style.backgroundImage = `linear-gradient(var(--bg-overlay), var(--bg-overlay)), url('${url}')`;
       } else {
-        document.body.style.backgroundImage = "";
+        document.body.style.backgroundImage = "linear-gradient(var(--bg-overlay), var(--bg-overlay)), var(--default-bg)";
       }
     }
 
@@ -395,12 +402,11 @@
         await loadBackground();
         await fetchLists();
       } else {
-        // Fallback display if database credentials are not yet set
         listsData = [
           {
             id: 1,
-            subject: "Supabase Setup Pending",
-            items: ["Open index.html in an editor", "Paste your Project URL", "Paste your Anon Key", "Refresh this page", "Start adding lists!"],
+            subject: "Supabase Connection Pending",
+            items: ["Open index.html", "Paste your SUPABASE_URL", "Paste your SUPABASE_ANON_KEY", "Save index.html and push to GitHub", "Refresh to manage live database"],
             date_added: getFormattedCurrentDate()
           }
         ];
@@ -410,15 +416,17 @@
 
     async function loadBackground() {
       try {
-        const { data } = await dbClient
+        const { data, error } = await dbClient
           .from('site_settings')
           .select('value')
           .eq('key', 'background_url')
-          .single();
+          .maybeSingle();
 
-        if (data && data.value) applyBackground(data.value);
+        if (!error && data && data.value) {
+          applyBackground(data.value);
+        }
       } catch (e) {
-        console.warn("Could not load background:", e);
+        console.warn("Background load skipped:", e);
       }
     }
 
@@ -429,12 +437,18 @@
           .select('*')
           .order('id', { ascending: false });
 
-        if (!error && data) {
+        if (error) {
+          console.error("Fetch lists error:", error);
+          alert("Supabase error fetching lists: " + error.message);
+          return;
+        }
+
+        if (data) {
           listsData = data;
           renderAllLists();
         }
       } catch (e) {
-        console.warn("Could not load lists:", e);
+        console.warn("Could not fetch lists:", e);
       }
     }
 
@@ -506,7 +520,7 @@
 
     adminTriggerBtn.addEventListener("click", promptAdminLogin);
 
-    // Failsafe Keyboard Shortcut: Ctrl + Shift + A (or Cmd + Shift + A)
+    // Keyboard Shortcut Failsafe: Ctrl+Shift+A / Cmd+Shift+A
     window.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "a") {
         e.preventDefault();
@@ -518,24 +532,37 @@
       isAdmin = false;
       document.body.classList.remove("admin-mode");
       adminPanel.classList.remove("active");
-      adminTriggerBtn.style.display = "block";
+      adminTriggerBtn.style.display = "flex";
     });
 
-    // Background Controls
+    // Background Handlers (Persisted to Supabase)
     document.getElementById("setBgBtn").addEventListener("click", async () => {
-      if (!isAdmin || !dbClient) return;
+      if (!isAdmin) return;
       const url = document.getElementById("bgUrlInput").value.trim();
-      if (url) {
-        applyBackground(url);
-        await dbClient.from('site_settings').upsert({ key: 'background_url', value: url });
-        document.getElementById("bgUrlInput").value = "";
+      if (!url) return;
+
+      applyBackground(url);
+      if (dbClient) {
+        const { error } = await dbClient
+          .from('site_settings')
+          .upsert({ key: 'background_url', value: url });
+
+        if (error) {
+          alert("Supabase background save error: " + error.message);
+        } else {
+          document.getElementById("syncStatusMsg").textContent = "✅ Background saved to Supabase!";
+          setTimeout(() => { document.getElementById("syncStatusMsg").textContent = ""; }, 3000);
+        }
       }
+      document.getElementById("bgUrlInput").value = "";
     });
 
     document.getElementById("resetBgBtn").addEventListener("click", async () => {
-      if (!isAdmin || !dbClient) return;
-      applyBackground(null);
-      await dbClient.from('site_settings').upsert({ key: 'background_url', value: '' });
+      if (!isAdmin) return;
+      applyBackground("");
+      if (dbClient) {
+        await dbClient.from('site_settings').upsert({ key: 'background_url', value: '' });
+      }
     });
 
     // Modal & Add List Controls
@@ -569,7 +596,11 @@
 
       if (dbClient) {
         const { data, error } = await dbClient.from('top5_lists').insert([newList]).select();
-        if (!error && data) {
+        if (error) {
+          alert("Error saving list to Supabase: " + error.message);
+          return;
+        }
+        if (data && data.length > 0) {
           listsData.unshift(data[0]);
           renderAllLists();
         }
@@ -587,7 +618,11 @@
       if (!isAdmin) return;
       if (confirm(`Delete this list?`)) {
         if (dbClient) {
-          await dbClient.from('top5_lists').delete().eq('id', id);
+          const { error } = await dbClient.from('top5_lists').delete().eq('id', id);
+          if (error) {
+            alert("Error deleting list: " + error.message);
+            return;
+          }
         }
         listsData = listsData.filter(item => item.id !== id);
         renderAllLists();
