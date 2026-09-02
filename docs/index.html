@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mobocop's Master List of Lists</title>
 
+  <!-- Supabase JS Client (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
     :root {
       --bg-overlay: rgba(10, 15, 29, 0.82);
@@ -96,9 +99,9 @@
       width: 100%;
     }
 
-    .admin-row input[type="text"], .admin-row input[type="password"] {
+    .admin-row input[type="text"] {
       flex: 1;
-      min-width: 200px;
+      min-width: 260px;
       padding: 0.6rem 0.8rem;
       background: rgba(11, 15, 25, 0.85);
       border: 1px solid var(--card-border);
@@ -312,21 +315,14 @@
 
   <!-- Admin Panel -->
   <div class="admin-panel" id="adminPanel">
-    <!-- One-Time GitHub Configuration -->
-    <div class="admin-row">
-      <input type="text" id="ghRepoInput" placeholder="GitHub Repository (owner/repo-name)">
-      <input type="password" id="ghTokenInput" placeholder="GitHub Fine-Grained Token (PAT)">
-      <button class="btn btn-secondary" id="saveGhConfigBtn">Save Repo Config</button>
-    </div>
-
     <!-- Background Image Field -->
-    <div class="admin-row" style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.5rem;">
+    <div class="admin-row">
       <input type="text" id="bgUrlInput" placeholder="Enter new background image URL...">
       <button class="btn" id="setBgBtn">Update Background</button>
       <button class="btn btn-secondary" id="resetBgBtn">Reset</button>
     </div>
 
-    <!-- Actions & Status Indicator -->
+    <!-- Actions & Status -->
     <div class="admin-row" style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.5rem;">
       <button class="btn" id="openCustomModalBtn">➕ Create New Top 5 List</button>
       <span class="status-msg" id="syncStatusMsg"></span>
@@ -345,7 +341,7 @@
   <div class="modal" id="customModal">
     <div class="modal-content">
       <h3 style="color: var(--accent);">Create New Top 5 List</h3>
-      <input type="text" id="customSubject" placeholder="Subject / Category (e.g. Tactical Aircraft)">
+      <input type="text" id="customSubject" placeholder="Subject / Category (e.g. Favorite Movies)">
       <input type="text" id="item1" placeholder="1. First item">
       <input type="text" id="item2" placeholder="2. Second item">
       <input type="text" id="item3" placeholder="3. Third item">
@@ -353,22 +349,24 @@
       <input type="text" id="item5" placeholder="5. Fifth item">
       <div class="modal-actions">
         <button class="btn btn-secondary" id="closeModalBtn">Cancel</button>
-        <button class="btn" id="saveCustomListBtn">Save & Sync to GitHub</button>
+        <button class="btn" id="saveCustomListBtn">Save List</button>
       </div>
     </div>
   </div>
 
-  <!-- Load External Data Store -->
-  <script src="lists.js"></script>
-
   <script>
+    /* ==========================================================================
+       SUPABASE CONFIGURATION:
+       Replace with your Supabase Project URL and Anon Public Key below.
+       ========================================================================== */
+    const SUPABASE_URL = "https://tozmfbneiasmnxbftlqw.supabase.co/rest/v1/";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvem1mYm5laWFzbW54YmZ0bHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzAzMjUsImV4cCI6MjEwMzk0NjMyNX0.-Z6w_lYZ9kmRtUWLK93XHP1aRUEd0NlEYM0qLvZWtNwEY";
     const ADMIN_PASSCODE = "1234";
-    let dataStore = window.MOBOCOP_DATA || { background: null, lists: [] };
-    let isAdmin = false;
 
-    // Load stored GitHub credentials from local browser storage
-    let ghRepo = localStorage.getItem("mobocop_gh_repo") || "";
-    let ghToken = localStorage.getItem("mobocop_gh_token") || "";
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let listsData = [];
+    let isAdmin = false;
 
     function getFormattedCurrentDate() {
       const now = new Date();
@@ -381,19 +379,40 @@
     function applyBackground(url) {
       if (url) {
         document.body.style.backgroundImage = `linear-gradient(var(--bg-overlay), var(--bg-overlay)), url('${url}')`;
-        dataStore.background = url;
       } else {
         document.body.style.backgroundImage = "";
-        dataStore.background = null;
       }
     }
 
-    window.addEventListener("DOMContentLoaded", () => {
-      if (dataStore.background) applyBackground(dataStore.background);
-      renderAllLists();
-      if (ghRepo) document.getElementById("ghRepoInput").value = ghRepo;
-      if (ghToken) document.getElementById("ghTokenInput").value = ghToken;
+    // Initial Load from Supabase
+    window.addEventListener("DOMContentLoaded", async () => {
+      await loadBackground();
+      await fetchLists();
     });
+
+    async function loadBackground() {
+      const { data, error } = await supabase
+        .from('site_settings')
+        .select('value')
+        .eq('key', 'background_url')
+        .single();
+
+      if (data && data.value) {
+        applyBackground(data.value);
+      }
+    }
+
+    async function fetchLists() {
+      const { data, error } = await supabase
+        .from('top5_lists')
+        .select('*')
+        .order('id', { ascending: false });
+
+      if (!error && data) {
+        listsData = data;
+        renderAllLists();
+      }
+    }
 
     function renderAllLists() {
       const featuredContainer = document.getElementById("featuredContainer");
@@ -402,20 +421,20 @@
       featuredContainer.innerHTML = "";
       grid.innerHTML = "";
 
-      if (!dataStore.lists || dataStore.lists.length === 0) return;
+      if (listsData.length === 0) return;
 
-      // Top-Center Featured Card (Most Recent)
-      const featuredCard = createCardElement(dataStore.lists[0], 0, true);
+      // Top-Center Featured (Most Recent)
+      const featuredCard = createCardElement(listsData[0], true);
       featuredContainer.appendChild(featuredCard);
 
       // Remaining Grid Cards
-      for (let i = 1; i < dataStore.lists.length; i++) {
-        const card = createCardElement(dataStore.lists[i], i, false);
+      for (let i = 1; i < listsData.length; i++) {
+        const card = createCardElement(listsData[i], false);
         grid.appendChild(card);
       }
     }
 
-    function createCardElement(listData, index, isFeatured) {
+    function createCardElement(listData, isFeatured) {
       const card = document.createElement("div");
       card.className = isFeatured ? "list-card featured-card" : "list-card";
 
@@ -429,87 +448,20 @@
       card.innerHTML = `
         <div class="list-card-header">
           <span class="list-subject">${listData.subject}</span>
-          <button class="delete-btn" onclick="deleteList(${index})" title="Delete List">&times;</button>
+          <button class="delete-btn" onclick="deleteList(${listData.id})" title="Delete List">&times;</button>
         </div>
         <ul class="top5-items">
           ${itemsHtml}
         </ul>
         <div class="list-footer">
-          ${listData.dateAdded || "Added Recently"}
+          ${listData.date_added || "Added Recently"}
         </div>
       `;
 
       return card;
     }
 
-    // Direct GitHub REST API Commit Engine
-    async function syncToGitHub() {
-      const statusEl = document.getElementById("syncStatusMsg");
-
-      if (!ghRepo || !ghToken) {
-        statusEl.textContent = "⚠️ Please configure your Repo & Token above.";
-        return;
-      }
-
-      statusEl.textContent = "⏳ Committing to GitHub...";
-
-      const apiUrl = `https://api.github.com/repos/${ghRepo}/contents/lists.js`;
-      const fileContent = `/* ==========================================================================\n   MOBOCOP'S MASTER LIST OF LISTS - PERSISTENT DATA STORE\n   ========================================================================== */\nwindow.MOBOCOP_DATA = ${JSON.stringify(dataStore, null, 2)};\n`;
-
-      try {
-        // Step 1: Get latest file SHA
-        let currentSha = null;
-        const getRes = await fetch(apiUrl, {
-          headers: {
-            "Authorization": `Bearer ${ghToken}`,
-            "Accept": "application/vnd.github.v3+json"
-          }
-        });
-
-        if (getRes.ok) {
-          const fileData = await getRes.json();
-          currentSha = fileData.sha;
-        }
-
-        // Step 2: Push commit to update lists.js
-        const putRes = await fetch(apiUrl, {
-          method: "PUT",
-          headers: {
-            "Authorization": `Bearer ${ghToken}`,
-            "Accept": "application/vnd.github.v3+json",
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            message: `Update lists.js [via Admin Panel]`,
-            content: btoa(unescape(encodeURIComponent(fileContent))),
-            sha: currentSha || undefined
-          })
-        });
-
-        if (putRes.ok) {
-          statusEl.textContent = "✅ Saved & Committed to GitHub!";
-          setTimeout(() => { statusEl.textContent = ""; }, 4000);
-        } else {
-          const errorData = await putRes.json();
-          statusEl.textContent = `❌ Commit error: ${errorData.message || "Check token permissions"}`;
-        }
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = "❌ Network connection error.";
-      }
-    }
-
-    // Save GitHub Config locally
-    document.getElementById("saveGhConfigBtn").addEventListener("click", () => {
-      ghRepo = document.getElementById("ghRepoInput").value.trim();
-      ghToken = document.getElementById("ghTokenInput").value.trim();
-      localStorage.setItem("mobocop_gh_repo", ghRepo);
-      localStorage.setItem("mobocop_gh_token", ghToken);
-      document.getElementById("syncStatusMsg").textContent = "Credentials Saved on this device.";
-      setTimeout(() => { document.getElementById("syncStatusMsg").textContent = ""; }, 3000);
-    });
-
-    // Admin Mode Handlers
+    // Admin Handlers
     const adminTriggerBtn = document.getElementById("adminTriggerBtn");
     const adminPanel = document.getElementById("adminPanel");
     const logoutAdminBtn = document.getElementById("logoutAdminBtn");
@@ -535,21 +487,21 @@
       adminTriggerBtn.style.display = "block";
     });
 
-    // Background Controls
-    document.getElementById("setBgBtn").addEventListener("click", () => {
+    // Background Handlers
+    document.getElementById("setBgBtn").addEventListener("click", async () => {
       if (!isAdmin) return;
       const url = document.getElementById("bgUrlInput").value.trim();
       if (url) {
         applyBackground(url);
+        await supabase.from('site_settings').upsert({ key: 'background_url', value: url });
         document.getElementById("bgUrlInput").value = "";
-        syncToGitHub();
       }
     });
 
-    document.getElementById("resetBgBtn").addEventListener("click", () => {
+    document.getElementById("resetBgBtn").addEventListener("click", async () => {
       if (!isAdmin) return;
       applyBackground(null);
-      syncToGitHub();
+      await supabase.from('site_settings').upsert({ key: 'background_url', value: '' });
     });
 
     // Modal & Add List Controls
@@ -564,7 +516,7 @@
       modal.style.display = "none";
     });
 
-    document.getElementById("saveCustomListBtn").addEventListener("click", () => {
+    document.getElementById("saveCustomListBtn").addEventListener("click", async () => {
       if (!isAdmin) return;
       const subject = document.getElementById("customSubject").value.trim() || "Untitled List";
       const items = [
@@ -575,26 +527,30 @@
         document.getElementById("item5").value.trim() || "Item 5"
       ];
 
-      dataStore.lists.unshift({
+      const newList = {
         subject: subject,
         items: items,
-        dateAdded: getFormattedCurrentDate()
-      });
+        date_added: getFormattedCurrentDate()
+      };
 
-      renderAllLists();
-      syncToGitHub();
+      const { data, error } = await supabase.from('top5_lists').insert([newList]).select();
+
+      if (!error && data) {
+        listsData.unshift(data[0]);
+        renderAllLists();
+      }
 
       document.getElementById("customSubject").value = "";
       for (let i = 1; i <= 5; i++) document.getElementById(`item${i}`).value = "";
       modal.style.display = "none";
     });
 
-    window.deleteList = function(index) {
+    window.deleteList = async function(id) {
       if (!isAdmin) return;
-      if (confirm(`Delete "${dataStore.lists[index].subject}"?`)) {
-        dataStore.lists.splice(index, 1);
+      if (confirm(`Delete this list?`)) {
+        await supabase.from('top5_lists').delete().eq('id', id);
+        listsData = listsData.filter(item => item.id !== id);
         renderAllLists();
-        syncToGitHub();
       }
     };
   </script>
