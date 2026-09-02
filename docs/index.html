@@ -400,7 +400,7 @@
           {
             id: 1,
             subject: "Supabase Setup Pending",
-            items: ["Open index.html", "Paste Project URL", "Paste Anon Key", "Refresh Page", "Add Your Lists"],
+            items: ["Open index.html in an editor", "Paste your Project URL", "Paste your Anon Key", "Refresh this page", "Start adding lists!"],
             date_added: getFormattedCurrentDate()
           }
         ];
@@ -447,9 +447,11 @@
 
       if (listsData.length === 0) return;
 
+      // Top-Center Featured (Most Recent)
       const featuredCard = createCardElement(listsData[0], true);
       featuredContainer.appendChild(featuredCard);
 
+      // Remaining Grid Cards
       for (let i = 1; i < listsData.length; i++) {
         const card = createCardElement(listsData[i], false);
         grid.appendChild(card);
