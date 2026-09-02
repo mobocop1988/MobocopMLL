@@ -4,9 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mobocop's Master List of Lists</title>
-  
-  <!-- Load External Data Store -->
-  <script src="lists.js"></script>
 
   <style>
     :root {
@@ -42,7 +39,6 @@
       transition: background-image 0.3s ease-in-out;
     }
 
-    /* Overall Title */
     h1.main-title {
       font-size: 2.75rem;
       font-weight: 800;
@@ -53,7 +49,7 @@
       cursor: default;
     }
 
-    /* Secret Admin Trigger */
+    /* Discreet Admin Trigger */
     .admin-trigger {
       position: fixed;
       bottom: 1rem;
@@ -100,9 +96,9 @@
       width: 100%;
     }
 
-    .admin-row input[type="text"] {
+    .admin-row input[type="text"], .admin-row input[type="password"] {
       flex: 1;
-      min-width: 260px;
+      min-width: 200px;
       padding: 0.6rem 0.8rem;
       background: rgba(11, 15, 25, 0.85);
       border: 1px solid var(--card-border);
@@ -138,12 +134,13 @@
       background: rgba(255, 255, 255, 0.2);
     }
 
-    button.btn-active {
-      background: var(--lime-featured) !important;
-      color: #0b0f19 !important;
+    .status-msg {
+      font-size: 0.85rem;
+      color: var(--lime-featured);
+      font-weight: 600;
     }
 
-    /* Layout Wrapper */
+    /* Cards Layout */
     .content-wrapper {
       width: 100%;
       max-width: 1200px;
@@ -153,7 +150,6 @@
       gap: 2rem;
     }
 
-    /* Top-Center Featured List */
     .featured-container {
       width: 100%;
       display: flex;
@@ -316,17 +312,24 @@
 
   <!-- Admin Panel -->
   <div class="admin-panel" id="adminPanel">
-    <!-- Background Manager -->
+    <!-- One-Time GitHub Configuration -->
     <div class="admin-row">
+      <input type="text" id="ghRepoInput" placeholder="GitHub Repository (owner/repo-name)">
+      <input type="password" id="ghTokenInput" placeholder="GitHub Fine-Grained Token (PAT)">
+      <button class="btn btn-secondary" id="saveGhConfigBtn">Save Repo Config</button>
+    </div>
+
+    <!-- Background Image Field -->
+    <div class="admin-row" style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.5rem;">
       <input type="text" id="bgUrlInput" placeholder="Enter new background image URL...">
       <button class="btn" id="setBgBtn">Update Background</button>
-      <button class="btn btn-secondary" id="resetBgBtn">Reset Background</button>
+      <button class="btn btn-secondary" id="resetBgBtn">Reset</button>
     </div>
-    <!-- List & File Sync Actions -->
-    <div class="admin-row" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.75rem;">
+
+    <!-- Actions & Status Indicator -->
+    <div class="admin-row" style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.5rem;">
       <button class="btn" id="openCustomModalBtn">➕ Create New Top 5 List</button>
-      <button class="btn btn-secondary" id="linkDataFileBtn" title="Select lists.js once to enable direct writing">🔗 Link 'lists.js' (Auto-Write)</button>
-      <button class="btn btn-secondary" id="downloadDataBtn" title="Save updated lists.js file">📥 Download lists.js</button>
+      <span class="status-msg" id="syncStatusMsg"></span>
       <button class="btn btn-secondary" id="logoutAdminBtn" style="margin-left: auto;">Lock Admin</button>
     </div>
   </div>
@@ -338,11 +341,11 @@
 
   <button class="admin-trigger" id="adminTriggerBtn" title="Admin Login">⚙</button>
 
-  <!-- Modal for Creating Lists -->
+  <!-- Create List Modal -->
   <div class="modal" id="customModal">
     <div class="modal-content">
       <h3 style="color: var(--accent);">Create New Top 5 List</h3>
-      <input type="text" id="customSubject" placeholder="Subject / Category">
+      <input type="text" id="customSubject" placeholder="Subject / Category (e.g. Tactical Aircraft)">
       <input type="text" id="item1" placeholder="1. First item">
       <input type="text" id="item2" placeholder="2. Second item">
       <input type="text" id="item3" placeholder="3. Third item">
@@ -350,18 +353,22 @@
       <input type="text" id="item5" placeholder="5. Fifth item">
       <div class="modal-actions">
         <button class="btn btn-secondary" id="closeModalBtn">Cancel</button>
-        <button class="btn" id="saveCustomListBtn">Save List</button>
+        <button class="btn" id="saveCustomListBtn">Save & Sync to GitHub</button>
       </div>
     </div>
   </div>
 
+  <!-- Load External Data Store -->
+  <script src="lists.js"></script>
+
   <script>
-    const MONTH_DAY_YEAR = "10191988";
-    
-    // Read from external lists.js file or fallback
+    const ADMIN_PASSCODE = "1234";
     let dataStore = window.MOBOCOP_DATA || { background: null, lists: [] };
     let isAdmin = false;
-    let fileHandle = null;
+
+    // Load stored GitHub credentials from local browser storage
+    let ghRepo = localStorage.getItem("mobocop_gh_repo") || "";
+    let ghToken = localStorage.getItem("mobocop_gh_token") || "";
 
     function getFormattedCurrentDate() {
       const now = new Date();
@@ -382,10 +389,10 @@
     }
 
     window.addEventListener("DOMContentLoaded", () => {
-      if (dataStore.background) {
-        applyBackground(dataStore.background);
-      }
+      if (dataStore.background) applyBackground(dataStore.background);
       renderAllLists();
+      if (ghRepo) document.getElementById("ghRepoInput").value = ghRepo;
+      if (ghToken) document.getElementById("ghTokenInput").value = ghToken;
     });
 
     function renderAllLists() {
@@ -397,11 +404,11 @@
 
       if (!dataStore.lists || dataStore.lists.length === 0) return;
 
-      // Top-Center Featured Card
+      // Top-Center Featured Card (Most Recent)
       const featuredCard = createCardElement(dataStore.lists[0], 0, true);
       featuredContainer.appendChild(featuredCard);
 
-      // Remaining Cards
+      // Remaining Grid Cards
       for (let i = 1; i < dataStore.lists.length; i++) {
         const card = createCardElement(dataStore.lists[i], i, false);
         grid.appendChild(card);
@@ -435,44 +442,74 @@
       return card;
     }
 
-    // Generate formatted content for lists.js
-    function getSerializedDataFileContent() {
-      return `/* ==========================================================================\n   MOBOCOP'S MASTER LIST OF LISTS - PERSISTENT DATA STORE\n   ========================================================================== */\nwindow.MOBOCOP_DATA = ${JSON.stringify(dataStore, null, 2)};\n`;
-    }
+    // Direct GitHub REST API Commit Engine
+    async function syncToGitHub() {
+      const statusEl = document.getElementById("syncStatusMsg");
 
-    // Direct File System Write to lists.js
-    async function syncDataFile() {
-      if (!fileHandle) return;
-      try {
-        const fileContent = getSerializedDataFileContent();
-        const writable = await fileHandle.createWritable();
-        await writable.write(fileContent);
-        await writable.close();
-      } catch (err) {
-        console.warn("Direct file sync failed:", err);
-      }
-    }
-
-    // Link lists.js File Handle
-    document.getElementById("linkDataFileBtn").addEventListener("click", async () => {
-      if (!window.showOpenFilePicker) {
-        alert("Direct write is not supported in this browser. Use the 'Download lists.js' button.");
+      if (!ghRepo || !ghToken) {
+        statusEl.textContent = "⚠️ Please configure your Repo & Token above.";
         return;
       }
+
+      statusEl.textContent = "⏳ Committing to GitHub...";
+
+      const apiUrl = `https://api.github.com/repos/${ghRepo}/contents/lists.js`;
+      const fileContent = `/* ==========================================================================\n   MOBOCOP'S MASTER LIST OF LISTS - PERSISTENT DATA STORE\n   ========================================================================== */\nwindow.MOBOCOP_DATA = ${JSON.stringify(dataStore, null, 2)};\n`;
+
       try {
-        [fileHandle] = await window.showOpenFilePicker({
-          types: [{ description: "JavaScript Data File", accept: { "text/javascript": [".js"] } }]
+        // Step 1: Get latest file SHA
+        let currentSha = null;
+        const getRes = await fetch(apiUrl, {
+          headers: {
+            "Authorization": `Bearer ${ghToken}`,
+            "Accept": "application/vnd.github.v3+json"
+          }
         });
-        const btn = document.getElementById("linkDataFileBtn");
-        btn.textContent = "✅ lists.js Linked (Live Syncing)";
-        btn.classList.add("btn-active");
-        syncDataFile();
+
+        if (getRes.ok) {
+          const fileData = await getRes.json();
+          currentSha = fileData.sha;
+        }
+
+        // Step 2: Push commit to update lists.js
+        const putRes = await fetch(apiUrl, {
+          method: "PUT",
+          headers: {
+            "Authorization": `Bearer ${ghToken}`,
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            message: `Update lists.js [via Admin Panel]`,
+            content: btoa(unescape(encodeURIComponent(fileContent))),
+            sha: currentSha || undefined
+          })
+        });
+
+        if (putRes.ok) {
+          statusEl.textContent = "✅ Saved & Committed to GitHub!";
+          setTimeout(() => { statusEl.textContent = ""; }, 4000);
+        } else {
+          const errorData = await putRes.json();
+          statusEl.textContent = `❌ Commit error: ${errorData.message || "Check token permissions"}`;
+        }
       } catch (err) {
-        console.log("File link cancelled.");
+        console.error(err);
+        statusEl.textContent = "❌ Network connection error.";
       }
+    }
+
+    // Save GitHub Config locally
+    document.getElementById("saveGhConfigBtn").addEventListener("click", () => {
+      ghRepo = document.getElementById("ghRepoInput").value.trim();
+      ghToken = document.getElementById("ghTokenInput").value.trim();
+      localStorage.setItem("mobocop_gh_repo", ghRepo);
+      localStorage.setItem("mobocop_gh_token", ghToken);
+      document.getElementById("syncStatusMsg").textContent = "Credentials Saved on this device.";
+      setTimeout(() => { document.getElementById("syncStatusMsg").textContent = ""; }, 3000);
     });
 
-    // Admin Authentication Handlers
+    // Admin Mode Handlers
     const adminTriggerBtn = document.getElementById("adminTriggerBtn");
     const adminPanel = document.getElementById("adminPanel");
     const logoutAdminBtn = document.getElementById("logoutAdminBtn");
@@ -480,7 +517,7 @@
     adminTriggerBtn.addEventListener("click", () => {
       if (!isAdmin) {
         const pass = prompt("Enter Admin Passcode:");
-        if (pass === MONTH_DAY_YEAR) {
+        if (pass === ADMIN_PASSCODE) {
           isAdmin = true;
           document.body.classList.add("admin-mode");
           adminPanel.classList.add("active");
@@ -498,24 +535,24 @@
       adminTriggerBtn.style.display = "block";
     });
 
-    // Background Handlers
+    // Background Controls
     document.getElementById("setBgBtn").addEventListener("click", () => {
       if (!isAdmin) return;
       const url = document.getElementById("bgUrlInput").value.trim();
       if (url) {
         applyBackground(url);
         document.getElementById("bgUrlInput").value = "";
-        syncDataFile();
+        syncToGitHub();
       }
     });
 
     document.getElementById("resetBgBtn").addEventListener("click", () => {
       if (!isAdmin) return;
       applyBackground(null);
-      syncDataFile();
+      syncToGitHub();
     });
 
-    // Modal & List Add Handlers
+    // Modal & Add List Controls
     const modal = document.getElementById("customModal");
     document.getElementById("openCustomModalBtn").addEventListener("click", () => {
       if (!isAdmin) return;
@@ -545,7 +582,7 @@
       });
 
       renderAllLists();
-      syncDataFile();
+      syncToGitHub();
 
       document.getElementById("customSubject").value = "";
       for (let i = 1; i <= 5; i++) document.getElementById(`item${i}`).value = "";
@@ -557,21 +594,9 @@
       if (confirm(`Delete "${dataStore.lists[index].subject}"?`)) {
         dataStore.lists.splice(index, 1);
         renderAllLists();
-        syncDataFile();
+        syncToGitHub();
       }
     };
-
-    // Manual Download Backup
-    document.getElementById("downloadDataBtn").addEventListener("click", () => {
-      if (!isAdmin) return;
-      const fileContent = getSerializedDataFileContent();
-      const blob = new Blob([fileContent], { type: "text/javascript" });
-      const downloadLink = document.createElement("a");
-      downloadLink.href = URL.createObjectURL(blob);
-      downloadLink.download = "lists.js";
-      downloadLink.click();
-    });
   </script>
-<script src="lists.js"></script>
 </body>
 </html>
