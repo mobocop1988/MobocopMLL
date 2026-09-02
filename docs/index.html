@@ -262,4 +262,335 @@
 
     .lists-grid {
       display: grid;
-      grid-template-columns: repeat(auto
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.75rem;
+      width: 100%;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(4px);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: #172036;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 90%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .modal-content input {
+      padding: 0.6rem 0.8rem;
+      background: rgba(11, 15, 25, 0.85);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      color: var(--text-main);
+      font-size: 0.9rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1 class="main-title">Mobocop's Master List of Lists</h1>
+
+  <!-- Admin Panel -->
+  <div class="admin-panel" id="adminPanel">
+    <!-- Background Image Field -->
+    <div class="admin-row">
+      <input type="text" id="bgUrlInput" placeholder="Enter new background image URL...">
+      <button class="btn" id="setBgBtn">Update Background</button>
+      <button class="btn btn-secondary" id="resetBgBtn">Reset</button>
+    </div>
+
+    <!-- Actions & Status -->
+    <div class="admin-row" style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.5rem;">
+      <button class="btn" id="openCustomModalBtn">➕ Create New Top 5 List</button>
+      <span class="status-msg" id="syncStatusMsg"></span>
+      <button class="btn btn-secondary" id="logoutAdminBtn" style="margin-left: auto;">Lock Admin</button>
+    </div>
+  </div>
+
+  <div class="content-wrapper">
+    <div class="featured-container" id="featuredContainer"></div>
+    <div class="lists-grid" id="listsGrid"></div>
+  </div>
+
+  <!-- Admin Trigger Gear -->
+  <button class="admin-trigger" id="adminTriggerBtn" title="Admin Login (or Ctrl+Shift+A)">⚙</button>
+
+  <!-- Create List Modal -->
+  <div class="modal" id="customModal">
+    <div class="modal-content">
+      <h3 style="color: var(--accent);">Create New Top 5 List</h3>
+      <input type="text" id="customSubject" placeholder="Subject / Category (e.g. Favorite Movies)">
+      <input type="text" id="item1" placeholder="1. First item">
+      <input type="text" id="item2" placeholder="2. Second item">
+      <input type="text" id="item3" placeholder="3. Third item">
+      <input type="text" id="item4" placeholder="4. Fourth item">
+      <input type="text" id="item5" placeholder="5. Fifth item">
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="closeModalBtn">Cancel</button>
+        <button class="btn" id="saveCustomListBtn">Save List</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       SUPABASE CONFIGURATION
+       ========================================================================== */
+    const SUPABASE_URL = "https://tozmfbneiasmnxbftlqw.supabase.co/rest/v1/";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvem1mYm5laWFzbW54YmZ0bHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzAzMjUsImV4cCI6MjEwMzk0NjMyNX0.-Z6w_lYZ9kmRtUWLK93XHP1aRUEd0NlEYM0qLvZWtNw";
+    const ADMIN_PASSCODE = "1234";
+
+    // Safe initialization avoiding global scope collision
+    let dbClient = null;
+    if (window.supabase && SUPABASE_URL !== "YOUR_SUPABASE_PROJECT_URL") {
+      dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+
+    let listsData = [];
+    let isAdmin = false;
+
+    function getFormattedCurrentDate() {
+      const now = new Date();
+      const day = now.getDate();
+      const month = now.toLocaleString("en-GB", { month: "long" });
+      const year = now.getFullYear();
+      return `${day} ${month} ${year}`;
+    }
+
+    function applyBackground(url) {
+      if (url) {
+        document.body.style.backgroundImage = `linear-gradient(var(--bg-overlay), var(--bg-overlay)), url('${url}')`;
+      } else {
+        document.body.style.backgroundImage = "";
+      }
+    }
+
+    // Load initial data
+    window.addEventListener("DOMContentLoaded", async () => {
+      if (dbClient) {
+        await loadBackground();
+        await fetchLists();
+      } else {
+        // Fallback display if database credentials are not yet set
+        listsData = [
+          {
+            id: 1,
+            subject: "Supabase Setup Pending",
+            items: ["Open index.html", "Paste Project URL", "Paste Anon Key", "Refresh Page", "Add Your Lists"],
+            date_added: getFormattedCurrentDate()
+          }
+        ];
+        renderAllLists();
+      }
+    });
+
+    async function loadBackground() {
+      try {
+        const { data } = await dbClient
+          .from('site_settings')
+          .select('value')
+          .eq('key', 'background_url')
+          .single();
+
+        if (data && data.value) applyBackground(data.value);
+      } catch (e) {
+        console.warn("Could not load background:", e);
+      }
+    }
+
+    async function fetchLists() {
+      try {
+        const { data, error } = await dbClient
+          .from('top5_lists')
+          .select('*')
+          .order('id', { ascending: false });
+
+        if (!error && data) {
+          listsData = data;
+          renderAllLists();
+        }
+      } catch (e) {
+        console.warn("Could not load lists:", e);
+      }
+    }
+
+    function renderAllLists() {
+      const featuredContainer = document.getElementById("featuredContainer");
+      const grid = document.getElementById("listsGrid");
+
+      featuredContainer.innerHTML = "";
+      grid.innerHTML = "";
+
+      if (listsData.length === 0) return;
+
+      const featuredCard = createCardElement(listsData[0], true);
+      featuredContainer.appendChild(featuredCard);
+
+      for (let i = 1; i < listsData.length; i++) {
+        const card = createCardElement(listsData[i], false);
+        grid.appendChild(card);
+      }
+    }
+
+    function createCardElement(listData, isFeatured) {
+      const card = document.createElement("div");
+      card.className = isFeatured ? "list-card featured-card" : "list-card";
+
+      const itemsHtml = listData.items.map((item, i) => `
+        <li class="top5-item">
+          <span class="rank-badge">${i + 1}</span>
+          <span>${item}</span>
+        </li>
+      `).join("");
+
+      card.innerHTML = `
+        <div class="list-card-header">
+          <span class="list-subject">${listData.subject}</span>
+          <button class="delete-btn" onclick="deleteList(${listData.id})" title="Delete List">&times;</button>
+        </div>
+        <ul class="top5-items">
+          ${itemsHtml}
+        </ul>
+        <div class="list-footer">
+          ${listData.date_added || "Added Recently"}
+        </div>
+      `;
+
+      return card;
+    }
+
+    // Admin Authentication Handlers
+    const adminTriggerBtn = document.getElementById("adminTriggerBtn");
+    const adminPanel = document.getElementById("adminPanel");
+    const logoutAdminBtn = document.getElementById("logoutAdminBtn");
+
+    function promptAdminLogin() {
+      if (!isAdmin) {
+        const pass = prompt("Enter Admin Passcode:");
+        if (pass === ADMIN_PASSCODE) {
+          isAdmin = true;
+          document.body.classList.add("admin-mode");
+          adminPanel.classList.add("active");
+          adminTriggerBtn.style.display = "none";
+        } else if (pass !== null) {
+          alert("Incorrect passcode.");
+        }
+      }
+    }
+
+    adminTriggerBtn.addEventListener("click", promptAdminLogin);
+
+    // Failsafe Keyboard Shortcut: Ctrl + Shift + A (or Cmd + Shift + A)
+    window.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        promptAdminLogin();
+      }
+    });
+
+    logoutAdminBtn.addEventListener("click", () => {
+      isAdmin = false;
+      document.body.classList.remove("admin-mode");
+      adminPanel.classList.remove("active");
+      adminTriggerBtn.style.display = "block";
+    });
+
+    // Background Controls
+    document.getElementById("setBgBtn").addEventListener("click", async () => {
+      if (!isAdmin || !dbClient) return;
+      const url = document.getElementById("bgUrlInput").value.trim();
+      if (url) {
+        applyBackground(url);
+        await dbClient.from('site_settings').upsert({ key: 'background_url', value: url });
+        document.getElementById("bgUrlInput").value = "";
+      }
+    });
+
+    document.getElementById("resetBgBtn").addEventListener("click", async () => {
+      if (!isAdmin || !dbClient) return;
+      applyBackground(null);
+      await dbClient.from('site_settings').upsert({ key: 'background_url', value: '' });
+    });
+
+    // Modal & Add List Controls
+    const modal = document.getElementById("customModal");
+    document.getElementById("openCustomModalBtn").addEventListener("click", () => {
+      if (!isAdmin) return;
+      modal.style.display = "flex";
+      document.getElementById("customSubject").focus();
+    });
+
+    document.getElementById("closeModalBtn").addEventListener("click", () => {
+      modal.style.display = "none";
+    });
+
+    document.getElementById("saveCustomListBtn").addEventListener("click", async () => {
+      if (!isAdmin) return;
+      const subject = document.getElementById("customSubject").value.trim() || "Untitled List";
+      const items = [
+        document.getElementById("item1").value.trim() || "Item 1",
+        document.getElementById("item2").value.trim() || "Item 2",
+        document.getElementById("item3").value.trim() || "Item 3",
+        document.getElementById("item4").value.trim() || "Item 4",
+        document.getElementById("item5").value.trim() || "Item 5"
+      ];
+
+      const newList = {
+        subject: subject,
+        items: items,
+        date_added: getFormattedCurrentDate()
+      };
+
+      if (dbClient) {
+        const { data, error } = await dbClient.from('top5_lists').insert([newList]).select();
+        if (!error && data) {
+          listsData.unshift(data[0]);
+          renderAllLists();
+        }
+      } else {
+        listsData.unshift({ id: Date.now(), ...newList });
+        renderAllLists();
+      }
+
+      document.getElementById("customSubject").value = "";
+      for (let i = 1; i <= 5; i++) document.getElementById(`item${i}`).value = "";
+      modal.style.display = "none";
+    });
+
+    window.deleteList = async function(id) {
+      if (!isAdmin) return;
+      if (confirm(`Delete this list?`)) {
+        if (dbClient) {
+          await dbClient.from('top5_lists').delete().eq('id', id);
+        }
+        listsData = listsData.filter(item => item.id !== id);
+        renderAllLists();
+      }
+    };
+  </script>
+</body>
+</html>
