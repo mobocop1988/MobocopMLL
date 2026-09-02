@@ -11,12 +11,13 @@
   <style>
     :root {
       --default-bg: url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1920&q=80');
-      --bg-overlay: rgba(10, 15, 29, 0.82);
-      --card-bg: rgba(23, 32, 54, 0.88);
+      --bg-overlay: rgba(10, 15, 29, 0.85);
+      --card-bg: rgba(23, 32, 54, 0.92);
       --card-border: rgba(255, 255, 255, 0.12);
       --accent: #38bdf8;
       --accent-hover: #0ea5e9;
       --lime-featured: #a3e635;
+      --community-accent: #f59e0b;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
     }
@@ -152,14 +153,14 @@
       font-weight: 600;
     }
 
-    /* Cards Layout */
+    /* Content Layout */
     .content-wrapper {
       width: 100%;
       max-width: 1200px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2rem;
+      gap: 2.5rem;
     }
 
     .featured-container {
@@ -168,12 +169,13 @@
       justify-content: center;
     }
 
+    /* List Card Base */
     .list-card {
       background: var(--card-bg);
       backdrop-filter: blur(16px);
       border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 1.25rem;
+      border-radius: 14px;
+      padding: 1.5rem;
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
       display: flex;
       flex-direction: column;
@@ -181,23 +183,22 @@
     }
 
     .featured-card {
-      max-width: 440px;
       border: 2px solid var(--lime-featured);
-      box-shadow: 0 0 25px rgba(163, 230, 53, 0.25), 0 10px 30px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 0 30px rgba(163, 230, 53, 0.25), 0 10px 30px rgba(0, 0, 0, 0.6);
     }
 
     .list-card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 1rem;
-      padding-bottom: 0.5rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.75rem;
       border-bottom: 1px solid var(--card-border);
     }
 
     .list-subject {
-      font-size: 1.2rem;
-      font-weight: 700;
+      font-size: 1.35rem;
+      font-weight: 800;
       color: var(--accent);
     }
 
@@ -223,6 +224,54 @@
       display: block;
     }
 
+    /* Side-by-Side Dual Columns */
+    .side-by-side-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      width: 100%;
+    }
+
+    @media (max-width: 768px) {
+      .side-by-side-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .column-box {
+      background: rgba(11, 15, 25, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .column-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .title-mobocop {
+      color: var(--accent);
+    }
+
+    .featured-card .title-mobocop {
+      color: var(--lime-featured);
+    }
+
+    .title-others {
+      color: var(--community-accent);
+    }
+
     .top5-items {
       list-style: none;
       display: flex;
@@ -235,8 +284,8 @@
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      background: rgba(11, 15, 25, 0.6);
-      padding: 0.55rem 0.8rem;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 0.55rem 0.75rem;
       border-radius: 6px;
       font-size: 0.95rem;
     }
@@ -259,22 +308,99 @@
       background: var(--lime-featured);
     }
 
+    .others-badge {
+      background: var(--community-accent) !important;
+      color: #0b0f19;
+    }
+
+    .vote-count-tag {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-left: auto;
+      font-weight: 600;
+    }
+
+    .vote-btn {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: var(--community-accent);
+      border-radius: 4px;
+      padding: 0.2rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-left: 0.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .vote-btn:hover {
+      background: var(--community-accent);
+      color: #0b0f19;
+    }
+
+    .vote-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      border-color: transparent;
+    }
+
+    /* Voting Status & Community Input */
+    .voting-controls {
+      margin-top: 0.75rem;
+      padding-top: 0.5rem;
+      border-top: 1px dashed rgba(255, 255, 255, 0.08);
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .voting-controls input {
+      flex: 1;
+      padding: 0.4rem 0.6rem;
+      background: rgba(11, 15, 25, 0.85);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      color: var(--text-main);
+      font-size: 0.8rem;
+    }
+
+    .voting-badge-open {
+      font-size: 0.7rem;
+      background: rgba(163, 230, 53, 0.15);
+      color: var(--lime-featured);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    .voting-badge-closed {
+      font-size: 0.7rem;
+      background: rgba(148, 163, 184, 0.15);
+      color: var(--text-muted);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    /* Card Footer */
     .list-footer {
       margin-top: 1rem;
       padding-top: 0.5rem;
       border-top: 1px solid rgba(255, 255, 255, 0.06);
       font-size: 0.8rem;
       color: var(--text-muted);
-      text-align: right;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
     .lists-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 1.75rem;
+      grid-template-columns: 1fr;
+      gap: 2rem;
       width: 100%;
     }
 
+    /* Modal Form */
     .modal {
       display: none;
       position: fixed;
@@ -324,14 +450,11 @@
 
   <!-- Admin Panel -->
   <div class="admin-panel" id="adminPanel">
-    <!-- Background Image Field -->
     <div class="admin-row">
       <input type="text" id="bgUrlInput" placeholder="Enter new background image URL...">
-      <button class="btn" id="setBgBtn">Update & Save Background</button>
+      <button class="btn" id="setBgBtn">Update Background</button>
       <button class="btn btn-secondary" id="resetBgBtn">Reset to Default</button>
     </div>
-
-    <!-- Actions & Status -->
     <div class="admin-row" style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.5rem;">
       <button class="btn" id="openCustomModalBtn">➕ Create New Top 5 List</button>
       <span class="status-msg" id="syncStatusMsg"></span>
@@ -351,7 +474,7 @@
   <div class="modal" id="customModal">
     <div class="modal-content">
       <h3 style="color: var(--accent);">Create New Top 5 List</h3>
-      <input type="text" id="customSubject" placeholder="Subject / Category (e.g. Favorite Sci-Fi Movies)">
+      <input type="text" id="customSubject" placeholder="Subject / Category (e.g. Tactical Fighter Jets)">
       <input type="text" id="item1" placeholder="1. First item">
       <input type="text" id="item2" placeholder="2. Second item">
       <input type="text" id="item3" placeholder="3. Third item">
@@ -368,9 +491,13 @@
     /* ==========================================================================
        SUPABASE CONFIGURATION
        ========================================================================== */
-    const SUPABASE_URL = "https://tozmfbneiasmnxbftlqw.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvem1mYm5laWFzbW54YmZ0bHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzAzMjUsImV4cCI6MjEwMzk0NjMyNX0.-Z6w_lYZ9kmRtUWLK93XHP1aRUEd0NlEYM0qLvZWtNw";
-    const ADMIN_PASSCODE = "Emmawatson*1988";
+    const RAW_SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL";
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+    const ADMIN_PASSCODE = "1234";
+
+    const SUPABASE_URL = RAW_SUPABASE_URL.trim()
+      .replace(/\/+$/, '')
+      .replace(/\/rest\/v1\/?$/, '');
 
     let dbClient = null;
     if (window.supabase && SUPABASE_URL.startsWith("http")) {
@@ -378,14 +505,21 @@
     }
 
     let listsData = [];
+    let votesMap = {}; // { [list_id]: [ {id, item_text, vote_count} ] }
     let isAdmin = false;
 
+    // Helper: Standardized Date Formatter ("1 September 2026")
     function getFormattedCurrentDate() {
       const now = new Date();
       const day = now.getDate();
       const month = now.toLocaleString("en-GB", { month: "long" });
       const year = now.getFullYear();
       return `${day} ${month} ${year}`;
+    }
+
+    // Check if a list was created today
+    function isVotingActive(dateString) {
+      return dateString === getFormattedCurrentDate();
     }
 
     function applyBackground(url) {
@@ -396,59 +530,59 @@
       }
     }
 
-    // Load initial data
+    // Initialize & Fetch
     window.addEventListener("DOMContentLoaded", async () => {
       if (dbClient) {
         await loadBackground();
-        await fetchLists();
+        await fetchAllData();
       } else {
-        listsData = [
-          {
-            id: 1,
-            subject: "Supabase Connection Pending",
-            items: ["Open index.html", "Paste your SUPABASE_URL", "Paste your SUPABASE_ANON_KEY", "Save index.html and push to GitHub", "Refresh to manage live database"],
-            date_added: getFormattedCurrentDate()
-          }
-        ];
         renderAllLists();
       }
     });
 
     async function loadBackground() {
       try {
-        const { data, error } = await dbClient
+        const { data } = await dbClient
           .from('site_settings')
           .select('value')
           .eq('key', 'background_url')
           .maybeSingle();
 
-        if (!error && data && data.value) {
-          applyBackground(data.value);
-        }
+        if (data && data.value) applyBackground(data.value);
       } catch (e) {
         console.warn("Background load skipped:", e);
       }
     }
 
-    async function fetchLists() {
+    async function fetchAllData() {
       try {
-        const { data, error } = await dbClient
+        // 1. Fetch Mobocop's lists
+        const { data: lists, error: listsErr } = await dbClient
           .from('top5_lists')
           .select('*')
           .order('id', { ascending: false });
 
-        if (error) {
-          console.error("Fetch lists error:", error);
-          alert("Supabase error fetching lists: " + error.message);
-          return;
+        if (!listsErr && lists) {
+          listsData = lists;
         }
 
-        if (data) {
-          listsData = data;
-          renderAllLists();
+        // 2. Fetch community votes
+        const { data: votes, error: votesErr } = await dbClient
+          .from('community_votes')
+          .select('*')
+          .order('vote_count', { ascending: false });
+
+        if (!votesErr && votes) {
+          votesMap = {};
+          votes.forEach(v => {
+            if (!votesMap[v.list_id]) votesMap[v.list_id] = [];
+            votesMap[v.list_id].push(v);
+          });
         }
+
+        renderAllLists();
       } catch (e) {
-        console.warn("Could not fetch lists:", e);
+        console.warn("Data load error:", e);
       }
     }
 
@@ -465,7 +599,7 @@
       const featuredCard = createCardElement(listsData[0], true);
       featuredContainer.appendChild(featuredCard);
 
-      // Remaining Grid Cards
+      // Remaining Lists
       for (let i = 1; i < listsData.length; i++) {
         const card = createCardElement(listsData[i], false);
         grid.appendChild(card);
@@ -476,30 +610,125 @@
       const card = document.createElement("div");
       card.className = isFeatured ? "list-card featured-card" : "list-card";
 
-      const itemsHtml = listData.items.map((item, i) => `
+      const activeVoting = isVotingActive(listData.date_added);
+      const communityItems = votesMap[listData.id] || [];
+
+      // Mobocop's Mindset Items
+      const mobocopHtml = listData.items.map((item, i) => `
         <li class="top5-item">
           <span class="rank-badge">${i + 1}</span>
           <span>${item}</span>
         </li>
       `).join("");
 
+      // The Others (Top 5 Ranked by Vote Count)
+      let othersHtml = "";
+      for (let i = 0; i < 5; i++) {
+        const entry = communityItems[i];
+        if (entry) {
+          othersHtml += `
+            <li class="top5-item">
+              <span class="rank-badge others-badge">${i + 1}</span>
+              <span>${entry.item_text}</span>
+              <span class="vote-count-tag">${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'}</span>
+              <button class="vote-btn" ${!activeVoting ? 'disabled' : ''} onclick="submitVote(${entry.id}, ${listData.id})">👍 Vote</button>
+            </li>
+          `;
+        } else {
+          othersHtml += `
+            <li class="top5-item" style="opacity: 0.45; font-style: italic;">
+              <span class="rank-badge others-badge">${i + 1}</span>
+              <span>[Open Slot - Awaiting Votes]</span>
+            </li>
+          `;
+        }
+      }
+
       card.innerHTML = `
         <div class="list-card-header">
           <span class="list-subject">${listData.subject}</span>
           <button class="delete-btn" onclick="deleteList(${listData.id})" title="Delete List">&times;</button>
         </div>
-        <ul class="top5-items">
-          ${itemsHtml}
-        </ul>
+
+        <div class="side-by-side-grid">
+          <!-- Column 1: Mobocop's Mindset -->
+          <div class="column-box">
+            <div class="column-title title-mobocop">
+              <span>Mobocop's Mindset</span>
+              <span>⭐ Definitive</span>
+            </div>
+            <ul class="top5-items">
+              ${mobocopHtml}
+            </ul>
+          </div>
+
+          <!-- Column 2: The Others -->
+          <div class="column-box">
+            <div class="column-title title-others">
+              <span>The Others</span>
+              <span>${activeVoting ? '<span class="voting-badge-open">🟢 Voting Live</span>' : '<span class="voting-badge-closed">🔒 Voting Closed</span>'}</span>
+            </div>
+            <ul class="top5-items">
+              ${othersHtml}
+            </ul>
+
+            <!-- Suggestion / Entry Input (Only active on creation day) -->
+            ${activeVoting ? `
+              <div class="voting-controls">
+                <input type="text" id="suggestInput-${listData.id}" placeholder="Suggest item & add vote...">
+                <button class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="submitSuggestion(${listData.id})">Add</button>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
         <div class="list-footer">
-          ${listData.date_added || "Added Recently"}
+          <span>${activeVoting ? 'Voting closes at midnight' : 'Official Archive'}</span>
+          <span>${listData.date_added || "Added Recently"}</span>
         </div>
       `;
 
       return card;
     }
 
-    // Admin Authentication Handlers
+    // Community Actions: Upvote
+    window.submitVote = async function(voteId, listId) {
+      if (!dbClient) return;
+      const targetList = votesMap[listId] || [];
+      const item = targetList.find(v => v.id === voteId);
+      if (!item) return;
+
+      item.vote_count += 1;
+      renderAllLists();
+
+      await dbClient
+        .from('community_votes')
+        .update({ vote_count: item.vote_count })
+        .eq('id', voteId);
+    };
+
+    // Community Actions: Suggest New Item
+    window.submitSuggestion = async function(listId) {
+      if (!dbClient) return;
+      const input = document.getElementById(`suggestInput-${listId}`);
+      const text = input ? input.value.trim() : "";
+      if (!text) return;
+
+      const { data, error } = await dbClient
+        .from('community_votes')
+        .insert([{ list_id: listId, item_text: text, vote_count: 1 }])
+        .select();
+
+      if (!error && data) {
+        if (!votesMap[listId]) votesMap[listId] = [];
+        votesMap[listId].push(data[0]);
+        // Sort descending by vote count
+        votesMap[listId].sort((a, b) => b.vote_count - a.vote_count);
+        renderAllLists();
+      }
+    };
+
+    // Admin Handlers
     const adminTriggerBtn = document.getElementById("adminTriggerBtn");
     const adminPanel = document.getElementById("adminPanel");
     const logoutAdminBtn = document.getElementById("logoutAdminBtn");
@@ -520,7 +749,6 @@
 
     adminTriggerBtn.addEventListener("click", promptAdminLogin);
 
-    // Keyboard Shortcut Failsafe: Ctrl+Shift+A / Cmd+Shift+A
     window.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "a") {
         e.preventDefault();
@@ -535,7 +763,7 @@
       adminTriggerBtn.style.display = "flex";
     });
 
-    // Background Handlers (Persisted to Supabase)
+    // Background Controls
     document.getElementById("setBgBtn").addEventListener("click", async () => {
       if (!isAdmin) return;
       const url = document.getElementById("bgUrlInput").value.trim();
@@ -543,16 +771,9 @@
 
       applyBackground(url);
       if (dbClient) {
-        const { error } = await dbClient
-          .from('site_settings')
-          .upsert({ key: 'background_url', value: url });
-
-        if (error) {
-          alert("Supabase background save error: " + error.message);
-        } else {
-          document.getElementById("syncStatusMsg").textContent = "✅ Background saved to Supabase!";
-          setTimeout(() => { document.getElementById("syncStatusMsg").textContent = ""; }, 3000);
-        }
+        await dbClient.from('site_settings').upsert({ key: 'background_url', value: url });
+        document.getElementById("syncStatusMsg").textContent = "✅ Background saved!";
+        setTimeout(() => { document.getElementById("syncStatusMsg").textContent = ""; }, 3000);
       }
       document.getElementById("bgUrlInput").value = "";
     });
@@ -597,16 +818,13 @@
       if (dbClient) {
         const { data, error } = await dbClient.from('top5_lists').insert([newList]).select();
         if (error) {
-          alert("Error saving list to Supabase: " + error.message);
+          alert("Error saving list: " + error.message);
           return;
         }
         if (data && data.length > 0) {
           listsData.unshift(data[0]);
           renderAllLists();
         }
-      } else {
-        listsData.unshift({ id: Date.now(), ...newList });
-        renderAllLists();
       }
 
       document.getElementById("customSubject").value = "";
@@ -616,13 +834,9 @@
 
     window.deleteList = async function(id) {
       if (!isAdmin) return;
-      if (confirm(`Delete this list?`)) {
+      if (confirm(`Delete this list and its community votes?`)) {
         if (dbClient) {
-          const { error } = await dbClient.from('top5_lists').delete().eq('id', id);
-          if (error) {
-            alert("Error deleting list: " + error.message);
-            return;
-          }
+          await dbClient.from('top5_lists').delete().eq('id', id);
         }
         listsData = listsData.filter(item => item.id !== id);
         renderAllLists();
