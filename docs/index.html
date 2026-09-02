@@ -488,8 +488,8 @@
   </div>
 
   <script>
-    /* ==========================================================================
-       SUPABASE CONFIGURATION
+      /* ==========================================================================
+       SUPABASE CONFIGURATION & ZERO-IP ANONYMOUS ENGINE
        ========================================================================== */
     const RAW_SUPABASE_URL = "https://tozmfbneiasmnxbftlqw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvem1mYm5laWFzbW54YmZ0bHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzAzMjUsImV4cCI6MjEwMzk0NjMyNX0.-Z6w_lYZ9kmRtUWLK93XHP1aRUEd0NlEYM0qLvZWtNw";
@@ -505,10 +505,13 @@
     }
 
     let listsData = [];
-    let votesMap = {}; // { [list_id]: [ {id, item_text, vote_count} ] }
+    let votesMap = {};
     let isAdmin = false;
 
-    // Helper: Standardized Date Formatter ("1 September 2026")
+    // Load anonymous local ballot box from browser storage
+    // Format: { [itemId]: true }
+    let userVotedItems = JSON.parse(localStorage.getItem("mobocop_voted_items") || "{}");
+
     function getFormattedCurrentDate() {
       const now = new Date();
       const day = now.getDate();
@@ -517,7 +520,6 @@
       return `${day} ${month} ${year}`;
     }
 
-    // Check if a list was created today
     function isVotingActive(dateString) {
       return dateString === getFormattedCurrentDate();
     }
@@ -530,13 +532,10 @@
       }
     }
 
-    // Initialize & Fetch
     window.addEventListener("DOMContentLoaded", async () => {
       if (dbClient) {
         await loadBackground();
         await fetchAllData();
-      } else {
-        renderAllLists();
       }
     });
 
@@ -566,7 +565,7 @@
           listsData = lists;
         }
 
-        // 2. Fetch community votes
+        // 2. Fetch community votes (Sorted descending)
         const { data: votes, error: votesErr } = await dbClient
           .from('community_votes')
           .select('*')
@@ -611,7 +610,12 @@
       card.className = isFeatured ? "list-card featured-card" : "list-card";
 
       const activeVoting = isVotingActive(listData.date_added);
-      const communityItems = votesMap[listData.id] || [];
+      
+      // Real-Time Sort by vote count descending
+      const allCommunityItems = (votesMap[listData.id] || []).sort((a, b) => b.vote_count - a.vote_count);
+      
+      // Compression: if closed, cap to Top 5; if open, show all active suggestions
+      const displayItems = activeVoting ? allCommunityItems : allCommunityItems.slice(0, 5);
 
       // Mobocop's Mindset Items
       const mobocopHtml = listData.items.map((item, i) => `
@@ -621,22 +625,27 @@
         </li>
       `).join("");
 
-      // The Others (Top 5 Ranked by Vote Count)
+      // The Others (Community Ranked List)
       let othersHtml = "";
-      for (let i = 0; i < 5; i++) {
-        const entry = communityItems[i];
+      const slotsCount = Math.max(5, displayItems.length);
+
+      for (let i = 0; i < (activeVoting ? slotsCount : 5); i++) {
+        const entry = displayItems[i];
         if (entry) {
+          const alreadyVoted = !!userVotedItems[entry.id];
           othersHtml += `
             <li class="top5-item">
               <span class="rank-badge others-badge">${i + 1}</span>
               <span>${entry.item_text}</span>
               <span class="vote-count-tag">${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'}</span>
-              <button class="vote-btn" ${!activeVoting ? 'disabled' : ''} onclick="submitVote(${entry.id}, ${listData.id})">👍 Vote</button>
+              <button class="vote-btn" ${(!activeVoting || alreadyVoted) ? 'disabled' : ''} onclick="submitVote(${entry.id}, ${listData.id})">
+                ${alreadyVoted ? '✓ Voted' : '👍 Vote'}
+              </button>
             </li>
           `;
-        } else {
+        } else if (i < 5) {
           othersHtml += `
-            <li class="top5-item" style="opacity: 0.45; font-style: italic;">
+            <li class="top5-item" style="opacity: 0.4; font-style: italic;">
               <span class="rank-badge others-badge">${i + 1}</span>
               <span>[Open Slot - Awaiting Votes]</span>
             </li>
@@ -651,7 +660,6 @@
         </div>
 
         <div class="side-by-side-grid">
-          <!-- Column 1: Mobocop's Mindset -->
           <div class="column-box">
             <div class="column-title title-mobocop">
               <span>Mobocop's Mindset</span>
@@ -662,17 +670,15 @@
             </ul>
           </div>
 
-          <!-- Column 2: The Others -->
           <div class="column-box">
             <div class="column-title title-others">
               <span>The Others</span>
-              <span>${activeVoting ? '<span class="voting-badge-open">🟢 Voting Live</span>' : '<span class="voting-badge-closed">🔒 Voting Closed</span>'}</span>
+              <span>${activeVoting ? '<span class="voting-badge-open">🟢 Voting Live</span>' : '<span class="voting-badge-closed">🔒 Final Top 5 Locked</span>'}</span>
             </div>
             <ul class="top5-items">
               ${othersHtml}
             </ul>
 
-            <!-- Suggestion / Entry Input (Only active on creation day) -->
             ${activeVoting ? `
               <div class="voting-controls">
                 <input type="text" id="suggestInput-${listData.id}" placeholder="Suggest item & add vote...">
@@ -683,7 +689,7 @@
         </div>
 
         <div class="list-footer">
-          <span>${activeVoting ? 'Voting closes at midnight' : 'Official Archive'}</span>
+          <span>${activeVoting ? 'Voting open today only' : 'Archived Official Results'}</span>
           <span>${listData.date_added || "Added Recently"}</span>
         </div>
       `;
@@ -691,23 +697,36 @@
       return card;
     }
 
-    // Community Actions: Upvote
-    window.submitVote = async function(voteId, listId) {
+    // Anonymous Upvote (Local Ballot Check)
+    window.submitVote = async function(itemId, listId) {
       if (!dbClient) return;
+
+      if (userVotedItems[itemId]) {
+        alert("You have already voted for this item.");
+        return;
+      }
+
       const targetList = votesMap[listId] || [];
-      const item = targetList.find(v => v.id === voteId);
+      const item = targetList.find(v => v.id === itemId);
       if (!item) return;
 
+      // Mark vote locally in browser storage
+      userVotedItems[itemId] = true;
+      localStorage.setItem("mobocop_voted_items", JSON.stringify(userVotedItems));
+
+      // Update UI and re-sort dynamically
       item.vote_count += 1;
+      targetList.sort((a, b) => b.vote_count - a.vote_count);
       renderAllLists();
 
+      // Commit count increment to Supabase
       await dbClient
         .from('community_votes')
         .update({ vote_count: item.vote_count })
-        .eq('id', voteId);
+        .eq('id', itemId);
     };
 
-    // Community Actions: Suggest New Item
+    // Anonymous Suggestion
     window.submitSuggestion = async function(listId) {
       if (!dbClient) return;
       const input = document.getElementById(`suggestInput-${listId}`);
@@ -719,10 +738,15 @@
         .insert([{ list_id: listId, item_text: text, vote_count: 1 }])
         .select();
 
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
+        const newItem = data[0];
+
+        // Automatically mark the user as having voted for their own suggestion
+        userVotedItems[newItem.id] = true;
+        localStorage.setItem("mobocop_voted_items", JSON.stringify(userVotedItems));
+
         if (!votesMap[listId]) votesMap[listId] = [];
-        votesMap[listId].push(data[0]);
-        // Sort descending by vote count
+        votesMap[listId].push(newItem);
         votesMap[listId].sort((a, b) => b.vote_count - a.vote_count);
         renderAllLists();
       }
@@ -834,7 +858,7 @@
 
     window.deleteList = async function(id) {
       if (!isAdmin) return;
-      if (confirm(`Delete this list and its community votes?`)) {
+      if (confirm(`Delete this list and all its votes?`)) {
         if (dbClient) {
           await dbClient.from('top5_lists').delete().eq('id', id);
         }
