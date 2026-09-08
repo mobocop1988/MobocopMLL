@@ -453,7 +453,7 @@
       width: 100%;
     }
 
-    /* Modal Form */
+    /* Modals */
     .modal {
       display: none;
       position: fixed;
@@ -510,6 +510,7 @@
     </div>
     <div class="admin-row" style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.5rem;">
       <button class="btn" id="openCustomModalBtn">➕ Create New Top 5 List</button>
+      <button class="btn btn-secondary" id="openChangePassModalBtn">🔑 Change Passcode</button>
       <span class="status-msg" id="syncStatusMsg"></span>
       <button class="btn btn-secondary" id="logoutAdminBtn" style="margin-left: auto;">Lock Admin</button>
     </div>
@@ -560,13 +561,29 @@
     </div>
   </div>
 
+  <!-- Change Passcode Modal -->
+  <div class="modal" id="changePassModal">
+    <div class="modal-content">
+      <h3 style="color: var(--accent);">Change Admin Passcode</h3>
+      <input type="password" id="currentPassInput" placeholder="Enter current passcode">
+      <input type="password" id="newPassInput" placeholder="Enter new passcode">
+      <input type="password" id="confirmPassInput" placeholder="Confirm new passcode">
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="closePassModalBtn">Cancel</button>
+        <button class="btn" id="saveNewPassBtn">Save Passcode</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     /* ==========================================================================
-       SUPABASE CONFIGURATION
+       SUPABASE CONFIGURATION & DYNAMIC CREDENTIALS
        ========================================================================== */
     const RAW_SUPABASE_URL = "https://tozmfbneiasmnxbftlqw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvem1mYm5laWFzbW54YmZ0bHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzAzMjUsImV4cCI6MjEwMzk0NjMyNX0.-Z6w_lYZ9kmRtUWLK93XHP1aRUEd0NlEYM0qLvZWtNw";
-    const ADMIN_PASSCODE = "1234";
+    
+    // Default fallback passcode if not yet configured in database
+    let activeAdminPasscode = "1234";
 
     const SUPABASE_URL = RAW_SUPABASE_URL.trim()
       .replace(/\/+$/, '')
@@ -607,22 +624,34 @@
 
     window.addEventListener("DOMContentLoaded", async () => {
       if (dbClient) {
-        await loadBackground();
+        await loadSettings();
         await fetchAllData();
       }
     });
 
-    async function loadBackground() {
+    async function loadSettings() {
       try {
-        const { data } = await dbClient
+        // Fetch Background
+        const { data: bgData } = await dbClient
           .from('site_settings')
           .select('value')
           .eq('key', 'background_url')
           .maybeSingle();
 
-        if (data && data.value) applyBackground(data.value);
+        if (bgData && bgData.value) applyBackground(bgData.value);
+
+        // Fetch Dynamic Admin Passcode
+        const { data: passData } = await dbClient
+          .from('site_settings')
+          .select('value')
+          .eq('key', 'admin_passcode')
+          .maybeSingle();
+
+        if (passData && passData.value) {
+          activeAdminPasscode = passData.value;
+        }
       } catch (e) {
-        console.warn("Background load skipped:", e);
+        console.warn("Settings load skipped:", e);
       }
     }
 
@@ -665,11 +694,9 @@
 
       if (listsData.length === 0) return;
 
-      // Top-Center Featured (Most Recent)
       const featuredCard = createCardElement(listsData[0], true);
       featuredContainer.appendChild(featuredCard);
 
-      // Remaining Lists
       for (let i = 1; i < listsData.length; i++) {
         const card = createCardElement(listsData[i], false);
         grid.appendChild(card);
@@ -683,10 +710,8 @@
       const activeVoting = isVotingActive(listData.date_added);
       const allCommunityItems = (votesMap[listData.id] || []).sort((a, b) => b.vote_count - a.vote_count);
       
-      // Active voting shows all suggestions; closed shows locked top 5
       const displayItems = activeVoting ? allCommunityItems : allCommunityItems.slice(0, 5);
 
-      // Mobocop's Mindset Items
       const mobocopHtml = listData.items.map((item, i) => `
         <li class="top5-item">
           <span class="rank-badge">${i + 1}</span>
@@ -694,7 +719,6 @@
         </li>
       `).join("");
 
-      // The Others (Community Ranked List)
       let othersHtml = "";
       const slotsCount = Math.max(5, displayItems.length);
 
@@ -779,7 +803,7 @@
       return card;
     }
 
-    // Consolidated Vote Handler (+1 or -1)
+    // Consolidated Vote Handler
     window.handleVote = async function(itemId, listId, direction) {
       if (!dbClient) return;
 
@@ -812,14 +836,12 @@
       const text = input ? input.value.trim() : "";
       if (!text) return;
 
-      // 1. Max 5 additions check
       const currentCount = userAdditionsCount[listId] || 0;
       if (currentCount >= 5) {
         alert("You have reached the limit of 5 suggestions for this list.");
         return;
       }
       
-      // 2. Case-insensitive duplicate check
       const currentSuggestions = votesMap[listId] || [];
       const isDuplicate = currentSuggestions.some(item => item.item_text.toLowerCase() === text.toLowerCase());
 
@@ -836,11 +858,9 @@
       if (!error && data && data.length > 0) {
         const newItem = data[0];
 
-        // Increment user addition counter
         userAdditionsCount[listId] = currentCount + 1;
         localStorage.setItem("mobocop_user_additions", JSON.stringify(userAdditionsCount));
 
-        // Mark automatic vote
         userVotedItems[newItem.id] = true;
         localStorage.setItem("mobocop_voted_items", JSON.stringify(userVotedItems));
 
@@ -853,15 +873,25 @@
       }
     };
 
-    // Admin Handlers
+    // Admin Handlers & Passcode Login
     const adminTriggerBtn = document.getElementById("adminTriggerBtn");
     const adminPanel = document.getElementById("adminPanel");
     const logoutAdminBtn = document.getElementById("logoutAdminBtn");
 
-    function promptAdminLogin() {
+    async function promptAdminLogin() {
       if (!isAdmin) {
+        // Refresh latest passcode from db if available
+        if (dbClient) {
+          const { data } = await dbClient
+            .from('site_settings')
+            .select('value')
+            .eq('key', 'admin_passcode')
+            .maybeSingle();
+          if (data && data.value) activeAdminPasscode = data.value;
+        }
+
         const pass = prompt("Enter Admin Passcode:");
-        if (pass === ADMIN_PASSCODE) {
+        if (pass === activeAdminPasscode) {
           isAdmin = true;
           document.body.classList.add("admin-mode");
           adminPanel.classList.add("active");
@@ -955,6 +985,63 @@
       document.getElementById("customSubject").value = "";
       for (let i = 1; i <= 5; i++) document.getElementById(`item${i}`).value = "";
       modal.style.display = "none";
+    });
+
+    // Passcode Change Controls
+    const passModal = document.getElementById("changePassModal");
+    document.getElementById("openChangePassModalBtn").addEventListener("click", () => {
+      if (!isAdmin) return;
+      passModal.style.display = "flex";
+      document.getElementById("currentPassInput").focus();
+    });
+
+    document.getElementById("closePassModalBtn").addEventListener("click", () => {
+      passModal.style.display = "none";
+      document.getElementById("currentPassInput").value = "";
+      document.getElementById("newPassInput").value = "";
+      document.getElementById("confirmPassInput").value = "";
+    });
+
+    document.getElementById("saveNewPassBtn").addEventListener("click", async () => {
+      if (!isAdmin) return;
+      const currentPass = document.getElementById("currentPassInput").value;
+      const newPass = document.getElementById("newPassInput").value.trim();
+      const confirmPass = document.getElementById("confirmPassInput").value.trim();
+
+      if (currentPass !== activeAdminPasscode) {
+        alert("Current passcode does not match.");
+        return;
+      }
+
+      if (!newPass) {
+        alert("New passcode cannot be empty.");
+        return;
+      }
+
+      if (newPass !== confirmPass) {
+        alert("New passcodes do not match.");
+        return;
+      }
+
+      if (dbClient) {
+        const { error } = await dbClient
+          .from('site_settings')
+          .upsert({ key: 'admin_passcode', value: newPass });
+
+        if (error) {
+          alert("Error updating passcode: " + error.message);
+          return;
+        }
+
+        activeAdminPasscode = newPass;
+        document.getElementById("syncStatusMsg").textContent = "🔑 Passcode updated!";
+        setTimeout(() => { document.getElementById("syncStatusMsg").textContent = ""; }, 3000);
+      }
+
+      passModal.style.display = "none";
+      document.getElementById("currentPassInput").value = "";
+      document.getElementById("newPassInput").value = "";
+      document.getElementById("confirmPassInput").value = "";
     });
 
     window.deleteList = async function(id) {
