@@ -18,6 +18,7 @@
       --accent-hover: #0ea5e9;
       --lime-featured: #a3e635;
       --community-accent: #f59e0b;
+      --downvote-accent: #f43f5e;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
     }
@@ -50,7 +51,7 @@
       font-weight: 800;
       letter-spacing: -0.025em;
       text-align: center;
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
       text-shadow: 0 4px 16px rgba(0, 0, 0, 0.8);
       cursor: default;
     }
@@ -89,7 +90,7 @@
       border: 1px solid var(--card-border);
       border-radius: 12px;
       padding: 1rem 1.5rem;
-      margin-bottom: 2.5rem;
+      margin-bottom: 2rem;
       width: 100%;
       max-width: 900px;
       flex-direction: column;
@@ -160,7 +161,42 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2.5rem;
+      gap: 2rem;
+    }
+
+    /* Informational Rules Box */
+    .rules-card {
+      width: 100%;
+      background: rgba(23, 32, 54, 0.85);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-left: 4px solid var(--accent);
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .rules-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 0.6rem;
+    }
+
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      line-height: 1.45;
+    }
+
+    .rules-item strong {
+      color: var(--text-main);
     }
 
     .featured-container {
@@ -289,6 +325,13 @@
       border-radius: 6px;
       font-size: 0.95rem;
     }
+    
+    .vote-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-left: 0.5rem;
+    }
 
     .rank-badge {
       display: inline-flex;
@@ -329,13 +372,23 @@
       font-size: 0.75rem;
       font-weight: 700;
       cursor: pointer;
-      margin-left: 0.5rem;
       transition: all 0.2s ease;
     }
 
     .vote-btn:hover {
       background: var(--community-accent);
       color: #0b0f19;
+    }
+    
+    .downvote-btn {
+      background: rgba(244, 63, 94, 0.15);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      color: var(--downvote-accent);
+    }
+
+    .downvote-btn:hover {
+      background: var(--downvote-accent);
+      color: #f8fafc;
     }
 
     .vote-btn:disabled {
@@ -463,7 +516,27 @@
   </div>
 
   <div class="content-wrapper">
+    <!-- Informational Rules Card -->
+    <div class="rules-card">
+      <div class="rules-header">
+        <span>ℹ️ Community Guidelines & Daily Voting Rules</span>
+      </div>
+      <div class="rules-grid">
+        <div class="rules-item">
+          <strong>1. Add Additions:</strong> You may suggest up to <strong>5 items</strong> to each active voting list.
+        </div>
+        <div class="rules-item">
+          <strong>2. Upvote / Downvote:</strong> Vote <strong>👍 Up</strong> on contenders you want in the Top 5, or <strong>👎 Down</strong> on entries you dislike.
+        </div>
+        <div class="rules-item">
+          <strong>3. Daily Lock-In:</strong> At <strong>midnight closing</strong>, the Top 5 items are locked in for all eternity.
+        </div>
+      </div>
+    </div>
+
+    <!-- Featured (Today's Active List) -->
     <div class="featured-container" id="featuredContainer"></div>
+    <!-- Previous Lists Grid -->
     <div class="lists-grid" id="listsGrid"></div>
   </div>
 
@@ -488,8 +561,8 @@
   </div>
 
   <script>
-      /* ==========================================================================
-       SUPABASE CONFIGURATION & ZERO-IP ANONYMOUS ENGINE
+    /* ==========================================================================
+       SUPABASE CONFIGURATION
        ========================================================================== */
     const RAW_SUPABASE_URL = "https://tozmfbneiasmnxbftlqw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvem1mYm5laWFzbW54YmZ0bHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzAzMjUsImV4cCI6MjEwMzk0NjMyNX0.-Z6w_lYZ9kmRtUWLK93XHP1aRUEd0NlEYM0qLvZWtNw";
@@ -508,9 +581,9 @@
     let votesMap = {};
     let isAdmin = false;
 
-    // Load anonymous local ballot box from browser storage
-    // Format: { [itemId]: true }
+    // Local ballot box & additions tracker
     let userVotedItems = JSON.parse(localStorage.getItem("mobocop_voted_items") || "{}");
+    let userAdditionsCount = JSON.parse(localStorage.getItem("mobocop_user_additions") || "{}");
 
     function getFormattedCurrentDate() {
       const now = new Date();
@@ -555,7 +628,6 @@
 
     async function fetchAllData() {
       try {
-        // 1. Fetch Mobocop's lists
         const { data: lists, error: listsErr } = await dbClient
           .from('top5_lists')
           .select('*')
@@ -565,7 +637,6 @@
           listsData = lists;
         }
 
-        // 2. Fetch community votes (Sorted descending)
         const { data: votes, error: votesErr } = await dbClient
           .from('community_votes')
           .select('*')
@@ -610,11 +681,9 @@
       card.className = isFeatured ? "list-card featured-card" : "list-card";
 
       const activeVoting = isVotingActive(listData.date_added);
-      
-      // Real-Time Sort by vote count descending
       const allCommunityItems = (votesMap[listData.id] || []).sort((a, b) => b.vote_count - a.vote_count);
       
-      // Compression: if closed, cap to Top 5; if open, show all active suggestions
+      // Active voting shows all suggestions; closed shows locked top 5
       const displayItems = activeVoting ? allCommunityItems : allCommunityItems.slice(0, 5);
 
       // Mobocop's Mindset Items
@@ -638,9 +707,22 @@
               <span class="rank-badge others-badge">${i + 1}</span>
               <span>${entry.item_text}</span>
               <span class="vote-count-tag">${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'}</span>
-              <button class="vote-btn" ${(!activeVoting || alreadyVoted) ? 'disabled' : ''} onclick="submitVote(${entry.id}, ${listData.id})">
-                ${alreadyVoted ? '✓ Voted' : '👍 Vote'}
-              </button>
+              <div class="vote-controls">
+                <button 
+                  class="vote-btn" 
+                  title="Upvote"
+                  ${(!activeVoting || alreadyVoted) ? 'disabled' : ''} 
+                  onclick="handleVote(${entry.id}, ${listData.id}, 1)">
+                    ${alreadyVoted ? '✓' : '👍'}
+                </button>
+                <button 
+                  class="vote-btn downvote-btn" 
+                  title="Downvote"
+                  ${(!activeVoting || alreadyVoted) ? 'disabled' : ''} 
+                  onclick="handleVote(${entry.id}, ${listData.id}, -1)">
+                    ${alreadyVoted ? '✓' : '👎'}
+                </button>
+              </div>
             </li>
           `;
         } else if (i < 5) {
@@ -697,12 +779,12 @@
       return card;
     }
 
-    // Anonymous Upvote (Local Ballot Check)
-    window.submitVote = async function(itemId, listId) {
+    // Consolidated Vote Handler (+1 or -1)
+    window.handleVote = async function(itemId, listId, direction) {
       if (!dbClient) return;
 
       if (userVotedItems[itemId]) {
-        alert("You have already voted for this item.");
+        alert("You have already voted on this item.");
         return;
       }
 
@@ -710,28 +792,41 @@
       const item = targetList.find(v => v.id === itemId);
       if (!item) return;
 
-      // Mark vote locally in browser storage
       userVotedItems[itemId] = true;
       localStorage.setItem("mobocop_voted_items", JSON.stringify(userVotedItems));
 
-      // Update UI and re-sort dynamically
-      item.vote_count += 1;
+      item.vote_count += direction;
       targetList.sort((a, b) => b.vote_count - a.vote_count);
       renderAllLists();
 
-      // Commit count increment to Supabase
       await dbClient
         .from('community_votes')
         .update({ vote_count: item.vote_count })
         .eq('id', itemId);
     };
 
-    // Anonymous Suggestion
+    // Anonymous Suggestion with Case-Insensitive Check & 5-Item Limit
     window.submitSuggestion = async function(listId) {
       if (!dbClient) return;
       const input = document.getElementById(`suggestInput-${listId}`);
       const text = input ? input.value.trim() : "";
       if (!text) return;
+
+      // 1. Max 5 additions check
+      const currentCount = userAdditionsCount[listId] || 0;
+      if (currentCount >= 5) {
+        alert("You have reached the limit of 5 suggestions for this list.");
+        return;
+      }
+      
+      // 2. Case-insensitive duplicate check
+      const currentSuggestions = votesMap[listId] || [];
+      const isDuplicate = currentSuggestions.some(item => item.item_text.toLowerCase() === text.toLowerCase());
+
+      if (isDuplicate) {
+        alert("This item has already been suggested by the community.");
+        return;
+      }
 
       const { data, error } = await dbClient
         .from('community_votes')
@@ -741,13 +836,19 @@
       if (!error && data && data.length > 0) {
         const newItem = data[0];
 
-        // Automatically mark the user as having voted for their own suggestion
+        // Increment user addition counter
+        userAdditionsCount[listId] = currentCount + 1;
+        localStorage.setItem("mobocop_user_additions", JSON.stringify(userAdditionsCount));
+
+        // Mark automatic vote
         userVotedItems[newItem.id] = true;
         localStorage.setItem("mobocop_voted_items", JSON.stringify(userVotedItems));
 
         if (!votesMap[listId]) votesMap[listId] = [];
         votesMap[listId].push(newItem);
         votesMap[listId].sort((a, b) => b.vote_count - a.vote_count);
+        
+        input.value = "";
         renderAllLists();
       }
     };
