@@ -465,6 +465,14 @@
       color: var(--accent);
       border-color: var(--accent);
     }
+    
+    /* NEW STYLE FOR CUTOFF LINE */
+    .cutoff-line {
+        height: 1px;
+        background: repeating-linear-gradient(90deg, var(--community-accent), var(--community-accent) 6px, transparent 6px, transparent 12px);
+        margin: 0.5rem 0;
+        opacity: 0.6;
+    }
 
     /* Card Footer */
     .list-footer {
@@ -765,7 +773,7 @@
             </li>
         `).join("");
 
-        const renderItemHtml = (entry, index) => {
+        const renderItemHtml = (entry) => {
             const alreadyVoted = !!userVotedItems[entry.id];
             return `
             <li class="top5-item">
@@ -791,8 +799,23 @@
             </li>
             `;
         };
-
-        let othersHtml = itemsToDisplayInColumn.map((item, i) => renderItemHtml(item, i)).join("");
+        
+        let othersHtml = "";
+        let lineDrawn = false;
+        
+        if (activeVoting) {
+            let lastRank = 0;
+            itemsToDisplayInColumn.forEach(item => {
+                if (!lineDrawn && item.rank > 5 && lastRank <= 5) {
+                    othersHtml += `<div class="cutoff-line"></div>`;
+                    lineDrawn = true;
+                }
+                othersHtml += renderItemHtml(item);
+                lastRank = item.rank;
+            });
+        } else {
+             othersHtml = itemsToDisplayInColumn.map(item => renderItemHtml(item)).join("");
+        }
 
         if (!activeVoting && itemsToDisplayInColumn.length < 5) {
             for (let i = itemsToDisplayInColumn.length; i < 5; i++) {
@@ -805,12 +828,11 @@
             }
         }
         
-        if (itemsToDisplayInColumn.length === 0 && !activeVoting) {
-             othersHtml = `<li class="top5-item" style="opacity: 0.4; font-style: italic; justify-content: center;">No suggestions were logged.</li>`
+        if (itemsToDisplayInColumn.length === 0) {
+             othersHtml = `<li class="top5-item" style="opacity: 0.4; font-style: italic; justify-content: center;">No suggestions logged yet.</li>`
         }
 
-
-        const fullStandingsHtml = rankedItems.map((entry, index) => renderItemHtml(entry, index)).join("");
+        const fullStandingsHtml = rankedItems.map((entry) => renderItemHtml(entry)).join("");
 
         card.innerHTML = `
             <div class="list-card-header">
@@ -1132,6 +1154,4 @@
         renderAllLists();
       }
     };
-  </script>
-</body>
-</html>
+  
