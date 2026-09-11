@@ -434,6 +434,38 @@
       font-weight: 700;
     }
 
+    /* Expandable Standings Drawer */
+    .full-standings-drawer {
+      display: none;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .full-standings-drawer.expanded {
+      display: block;
+    }
+
+    .toggle-standings-btn {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 0.5rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-top: 1rem;
+    }
+
+    .toggle-standings-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
     /* Card Footer */
     .list-footer {
       margin-top: 1rem;
@@ -597,8 +629,10 @@
     let votesMap = {};
     let isAdmin = false;
 
+    // Local tracking states
     let userVotedItems = JSON.parse(localStorage.getItem("mobocop_voted_items") || "{}");
     let userAdditionsCount = JSON.parse(localStorage.getItem("mobocop_user_additions") || "{}");
+    let expandedLists = JSON.parse(localStorage.getItem("mobocop_expanded_drawers") || "{}");
 
     function getFormattedCurrentDate() {
       const now = new Date();
@@ -704,17 +738,13 @@
       card.className = isFeatured ? "list-card featured-card" : "list-card";
 
       const activeVoting = isVotingActive(listData.date_added);
+      const isExpanded = !!expandedLists[listData.id];
       
-      // Sort items by vote_count descending
       const sortedCommunityItems = [...(votesMap[listData.id] || [])].sort((a, b) => b.vote_count - a.vote_count);
 
-      // =========================================================================
-      // COMPETITION RANKING CALCULATION (1224 Ranking)
-      // Items with identical vote counts share the exact same rank.
-      // =========================================================================
+      // Rank calculation
       const rankedItems = [];
       let currentRank = 1;
-
       for (let i = 0; i < sortedCommunityItems.length; i++) {
         if (i > 0 && sortedCommunityItems[i].vote_count < sortedCommunityItems[i - 1].vote_count) {
           currentRank = i + 1;
@@ -725,11 +755,8 @@
         });
       }
 
-      // If active voting: show all entries
-      // If locked/closed: keep items with rank <= 5 (all tied at rank 5 are included)
-      const displayItems = activeVoting 
-        ? rankedItems 
-        : rankedItems.filter(item => item.rank <= 5);
+      // Default (collapsed) view splits entries to Top 5 (including tied 5ths)
+      const topFiveItems = rankedItems.filter(item => item.rank <= 5);
 
       // Mobocop's Mindset Items
       const mobocopHtml = listData.items.map((item, i) => `
@@ -739,39 +766,42 @@
         </li>
       `).join("");
 
-      // The Others (Community Ranked List)
-      let othersHtml = "";
-      const slotsCount = Math.max(5, displayItems.length);
+      // Render Helper helper for individual suggestions
+      const renderItemHtml = (entry, index) => {
+        const alreadyVoted = !!userVotedItems[entry.id];
+        return `
+          <li class="top5-item">
+            <span class="rank-badge others-badge">${entry.rank}</span>
+            <span>${entry.item_text}</span>
+            <span class="vote-count-tag">${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'}</span>
+            <div class="vote-controls">
+              <button 
+                class="vote-btn" 
+                title="Upvote"
+                ${(!activeVoting || alreadyVoted) ? 'disabled' : ''} 
+                onclick="handleVote(${entry.id}, ${listData.id}, 1)">
+                  ${alreadyVoted ? '✓' : '👍'}
+              </button>
+              <button 
+                class="vote-btn downvote-btn" 
+                title="Downvote"
+                ${(!activeVoting || alreadyVoted) ? 'disabled' : ''} 
+                onclick="handleVote(${entry.id}, ${listData.id}, -1)">
+                  ${alreadyVoted ? '✓' : '👎'}
+              </button>
+            </div>
+          </li>
+        `;
+      };
 
-      for (let i = 0; i < slotsCount; i++) {
-        const entry = displayItems[i];
+      // Construct collapsed list HTML (Only top 5)
+      let othersHtml = "";
+      const displayCount = Math.max(5, topFiveItems.length);
+      for (let i = 0; i < displayCount; i++) {
+        const entry = topFiveItems[i];
         if (entry) {
-          const alreadyVoted = !!userVotedItems[entry.id];
-          othersHtml += `
-            <li class="top5-item">
-              <span class="rank-badge others-badge">${entry.rank}</span>
-              <span>${entry.item_text}</span>
-              <span class="vote-count-tag">${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'}</span>
-              <div class="vote-controls">
-                <button 
-                  class="vote-btn" 
-                  title="Upvote"
-                  ${(!activeVoting || alreadyVoted) ? 'disabled' : ''} 
-                  onclick="handleVote(${entry.id}, ${listData.id}, 1)">
-                    ${alreadyVoted ? '✓' : '👍'}
-                </button>
-                <button 
-                  class="vote-btn downvote-btn" 
-                  title="Downvote"
-                  ${(!activeVoting || alreadyVoted) ? 'disabled' : ''} 
-                  onclick="handleVote(${entry.id}, ${listData.id}, -1)">
-                    ${alreadyVoted ? '✓' : '👎'}
-                </button>
-              </div>
-            </li>
-          `;
+          othersHtml += renderItemHtml(entry, i);
         } else if (i < 5) {
-          // Open slot indicator only if fewer than 5 items exist
           othersHtml += `
             <li class="top5-item" style="opacity: 0.4; font-style: italic;">
               <span class="rank-badge others-badge">${i + 1}</span>
@@ -780,6 +810,11 @@
           `;
         }
       }
+
+      // Construct Expanded Drawer HTML (Full Standings)
+      const fullStandingsHtml = rankedItems.length > 0 
+        ? rankedItems.map((entry, index) => renderItemHtml(entry, index)).join("")
+        : `<li class="top5-item" style="opacity: 0.4; font-style: italic; justify-content: center;">No suggestions logged yet.</li>`;
 
       card.innerHTML = `
         <div class="list-card-header">
@@ -816,6 +851,24 @@
           </div>
         </div>
 
+        <!-- Full Standings Toggle Trigger -->
+        <button class="toggle-standings-btn" onclick="toggleDrawer(${listData.id})">
+          ${isExpanded ? '▲ Hide Full Standings' : '▼ Show Full Standings (' + rankedItems.length + ' suggested)'}
+        </button>
+
+        <!-- Standings Drawer Box -->
+        <div class="full-standings-drawer ${isExpanded ? 'expanded' : ''}" id="drawer-${listData.id}">
+          <div class="column-box">
+            <div class="column-title" style="color: var(--accent);">
+              <span>📋 Complete Standings Ledger</span>
+              <span>All Additions</span>
+            </div>
+            <ul class="top5-items">
+              ${fullStandingsHtml}
+            </ul>
+          </div>
+        </div>
+
         <div class="list-footer">
           <span>${activeVoting ? 'Voting open today only' : 'Archived Official Results'}</span>
           <span>${listData.date_added || "Added Recently"}</span>
@@ -824,6 +877,13 @@
 
       return card;
     }
+
+    // Toggle Expand/Collapse State
+    window.toggleDrawer = function(listId) {
+      expandedLists[listId] = !expandedLists[listId];
+      localStorage.setItem("mobocop_expanded_drawers", JSON.stringify(expandedLists));
+      renderAllLists();
+    };
 
     // Consolidated Vote Handler
     window.handleVote = async function(itemId, listId, direction) {
@@ -1047,7 +1107,8 @@
       if (dbClient) {
         const { error } = await dbClient
           .from('site_settings')
-          .upsert({ key: 'admin_passcode', value: newPass });
+          .update({ value: newPass })
+          .eq('key', 'admin_passcode');
 
         if (error) {
           alert("Error updating passcode: " + error.message);
