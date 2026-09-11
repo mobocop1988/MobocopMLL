@@ -531,4 +531,443 @@
 </head>
 <body>
 
-  <h1 class="main-title">Mobocop's Maste
+  <h1 class="main-title">Mobocop's Master List of Lists</h1>
+
+  <!-- Admin Panel -->
+  <div class="admin-panel" id="adminPanel">
+    <div class="admin-row">
+      <input type="text" id="bgUrlInput" placeholder="Enter new background image URL...">
+      <button class="btn" id="setBgBtn">Update Background</button>
+      <button class="btn btn-secondary" id="resetBgBtn">Reset to Default</button>
+    </div>
+    <div class="admin-row" style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.5rem;">
+      <button class="btn" id="openCustomModalBtn">➕ Create New Top 5 List</button>
+      <button class="btn btn-secondary" id="openChangePassModalBtn">🔑 Change Passcode</button>
+      <span class="status-msg" id="syncStatusMsg"></span>
+      <button class="btn btn-secondary" id="logoutAdminBtn" style="margin-left: auto;">Lock Admin</button>
+    </div>
+  </div>
+
+  <div class="content-wrapper">
+    <!-- Informational Rules Card -->
+    <div class="rules-card">
+      <div class="rules-header">
+        <span>ℹ️ Community Guidelines & Daily Voting Rules</span>
+      </div>
+      <div class="rules-grid">
+        <div class="rules-item">
+          <strong>1. Add Additions:</strong> You may suggest up to <strong>5 items</strong> to each active voting list.
+        </div>
+        <div class="rules-item">
+          <strong>2. Upvote / Downvote:</strong> Vote <strong>👍 Up</strong> on contenders you want in the Top 5, or <strong>👎 Down</strong> on entries you dislike. Tied vote counts share the same rank.
+        </div>
+        <div class="rules-item">
+          <strong>3. Daily Lock-In:</strong> At <strong>midnight closing</strong>, the Top 5 items are locked in for all eternity (including all entries tied for 5th).
+        </div>
+      </div>
+    </div>
+
+    <!-- Featured (Today's Active List) -->
+    <div class="featured-container" id="featuredContainer"></div>
+    <!-- Previous Lists Grid -->
+    <div class="lists-grid" id="listsGrid"></div>
+  </div>
+
+  <!-- Admin Trigger Gear -->
+  <button class="admin-trigger" id="adminTriggerBtn" title="Admin Login (or Ctrl+Shift+A)">⚙</button>
+
+  <!-- Create List Modal -->
+  <div class="modal" id="customModal">
+    <div class="modal-content">
+      <h3 style="color: var(--accent);">Create New Top 5 List</h3>
+      <input type="text" id="customSubject" placeholder="Subject / Category (e.g. Tactical Fighter Jets)">
+      <input type="text" id="item1" placeholder="1. First item">
+      <input type="text" id="item2" placeholder="2. Second item">
+      <input type="text" id="item3" placeholder="3. Third item">
+      <input type="text" id="item4" placeholder="4. Fourth item">
+      <input type="text" id="item5" placeholder="5. Fifth item">
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="closeModalBtn">Cancel</button>
+        <button class="btn" id="saveCustomListBtn">Save List</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change Passcode Modal -->
+  <div class="modal" id="changePassModal">
+    <div class="modal-content">
+      <h3 style="color: var(--accent);">Change Admin Passcode</h3>
+      <input type="password" id="currentPassInput" placeholder="Enter current passcode">
+      <input type="password" id="newPassInput" placeholder="Enter new passcode">
+      <input type="password" id="confirmPassInput" placeholder="Confirm new passcode">
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="closePassModalBtn">Cancel</button>
+        <button class="btn" id="saveNewPassBtn">Save Passcode</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       SUPABASE CONFIGURATION & DYNAMIC CREDENTIALS
+       ========================================================================== */
+    const RAW_SUPABASE_URL = "https://tozmfbneiasmnxbftlqw.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvem1mYm5laWFzbW54YmZ0bHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzAzMjUsImV4cCI6MjEwMzk0NjMyNX0.-Z6w_lYZ9kmRtUWLK93XHP1aRUEd0NlEYM0qLvZWtNw";
+    
+    let activeAdminPasscode = "1234";
+
+    const SUPABASE_URL = RAW_SUPABASE_URL.trim()
+      .replace(/\/+$/, '')
+      .replace(/\/rest\/v1\/?$/, '');
+
+    let dbClient = null;
+    if (window.supabase && SUPABASE_URL.startsWith("http")) {
+      dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+
+    let listsData = [];
+    let votesMap = {};
+    let isAdmin = false;
+
+    let userVotedItems = JSON.parse(localStorage.getItem("mobocop_voted_items") || "{}");
+    let userAdditionsCount = JSON.parse(localStorage.getItem("mobocop_user_additions") || "{}");
+    let expandedLists = JSON.parse(localStorage.getItem("mobocop_expanded_drawers") || "{}");
+
+    function getFormattedCurrentDate() {
+      const now = new Date();
+      const day = now.getDate();
+      const month = now.toLocaleString("en-GB", { month: "long" });
+      const year = now.getFullYear();
+      return `${day} ${month} ${year}`;
+    }
+
+    function isVotingActive(dateString) {
+      return dateString === getFormattedCurrentDate();
+    }
+
+    function applyBackground(url) {
+      if (url && url.trim() !== '') {
+        document.body.style.backgroundImage = `linear-gradient(var(--bg-overlay), var(--bg-overlay)), url('${url}')`;
+      } else {
+        document.body.style.backgroundImage = "linear-gradient(var(--bg-overlay), var(--bg-overlay)), var(--default-bg)";
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      if (dbClient) {
+        await loadSettings();
+        await fetchAllData();
+      }
+    });
+
+    async function loadSettings() {
+      try {
+        const { data: bgData } = await dbClient
+          .from('site_settings')
+          .select('value')
+          .eq('key', 'background_url')
+          .maybeSingle();
+
+        if (bgData && bgData.value) applyBackground(bgData.value);
+
+        const { data: passData } = await dbClient
+          .from('site_settings')
+          .select('value')
+          .eq('key', 'admin_passcode')
+          .maybeSingle();
+
+        if (passData && passData.value) {
+          activeAdminPasscode = passData.value;
+        }
+      } catch (e) {
+        console.warn("Settings load skipped:", e);
+      }
+    }
+
+    async function fetchAllData() {
+      try {
+        const { data: lists, error: listsErr } = await dbClient
+          .from('top5_lists')
+          .select('*')
+          .order('id', { ascending: false });
+
+        if (!listsErr && lists) {
+          listsData = lists;
+        }
+
+        const { data: votes, error: votesErr } = await dbClient
+          .from('community_votes')
+          .select('*')
+          .order('vote_count', { ascending: false });
+
+        if (!votesErr && votes) {
+          votesMap = {};
+          votes.forEach(v => {
+            if (!votesMap[v.list_id]) votesMap[v.list_id] = [];
+            votesMap[v.list_id].push(v);
+          });
+        }
+
+        renderAllLists();
+      } catch (e) {
+        console.warn("Data load error:", e);
+      }
+    }
+
+    function renderAllLists() {
+      const featuredContainer = document.getElementById("featuredContainer");
+      const grid = document.getElementById("listsGrid");
+
+      featuredContainer.innerHTML = "";
+      grid.innerHTML = "";
+
+      if (listsData.length === 0) return;
+
+      const featuredCard = createCardElement(listsData[0], true);
+      featuredContainer.appendChild(featuredCard);
+
+      for (let i = 1; i < listsData.length; i++) {
+        const card = createCardElement(listsData[i], false);
+        grid.appendChild(card);
+      }
+    }
+
+    function createCardElement(listData, isFeatured) {
+      const card = document.createElement("div");
+      card.className = isFeatured ? "list-card featured-card" : "list-card";
+
+      const activeVoting = isVotingActive(listData.date_added);
+      const isExpanded = !!expandedLists[listData.id];
+      
+      const sortedCommunityItems = [...(votesMap[listData.id] || [])].sort((a, b) => b.vote_count - a.vote_count);
+
+      // Competition Ranking Calculation (1224 Ranking)
+      const rankedItems = [];
+      let currentRank = 1;
+      for (let i = 0; i < sortedCommunityItems.length; i++) {
+        if (i > 0 && sortedCommunityItems[i].vote_count < sortedCommunityItems[i - 1].vote_count) {
+          currentRank = i + 1;
+        }
+        rankedItems.push({
+          ...sortedCommunityItems[i],
+          rank: currentRank
+        });
+      }
+
+      // Dynamic Display Logic:
+      // - Open/Active Voting: Display ALL community suggestions directly in "The Others"
+      // - Closed/Archived: Show ONLY the Top 5 (including all ties at rank 5)
+      const displayItems = activeVoting 
+        ? rankedItems 
+        : rankedItems.filter(item => item.rank <= 5);
+
+      // Mobocop's Mindset Items
+      const mobocopHtml = listData.items.map((item, i) => `
+        <li class="top5-item">
+          <span class="rank-badge">${i + 1}</span>
+          <span>${item}</span>
+        </li>
+      `).join("");
+
+      // Render Helper for Individual Suggestion Entries
+      const renderItemHtml = (entry) => {
+        const alreadyVoted = !!userVotedItems[entry.id];
+        return `
+          <li class="top5-item">
+            <span class="rank-badge others-badge">${entry.rank}</span>
+            <span>${entry.item_text}</span>
+            <span class="vote-count-tag">${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'}</span>
+            <div class="vote-controls">
+              <button 
+                class="vote-btn" 
+                title="Upvote"
+                ${(!activeVoting || alreadyVoted) ? 'disabled' : ''} 
+                onclick="handleVote(${entry.id}, ${listData.id}, 1)">
+                  ${alreadyVoted ? '✓' : '👍'}
+              </button>
+              <button 
+                class="vote-btn downvote-btn" 
+                title="Downvote"
+                ${(!activeVoting || alreadyVoted) ? 'disabled' : ''} 
+                onclick="handleVote(${entry.id}, ${listData.id}, -1)">
+                  ${alreadyVoted ? '✓' : '👎'}
+              </button>
+            </div>
+          </li>
+        `;
+      };
+
+      // Construct "The Others" List HTML
+      let othersHtml = "";
+      const displaySlots = Math.max(5, displayItems.length);
+      for (let i = 0; i < displaySlots; i++) {
+        const entry = displayItems[i];
+        if (entry) {
+          othersHtml += renderItemHtml(entry);
+        } else if (i < 5) {
+          othersHtml += `
+            <li class="top5-item" style="opacity: 0.4; font-style: italic;">
+              <span class="rank-badge others-badge">${i + 1}</span>
+              <span>[Open Slot - Awaiting Votes]</span>
+            </li>
+          `;
+        }
+      }
+
+      // Drawer HTML (Only enabled for closed lists)
+      let drawerToggleHtml = "";
+      let drawerContentHtml = "";
+
+      if (!activeVoting) {
+        const fullStandingsHtml = rankedItems.length > 0 
+          ? rankedItems.map(entry => renderItemHtml(entry)).join("")
+          : `<li class="top5-item" style="opacity: 0.4; font-style: italic; justify-content: center;">No suggestions logged.</li>`;
+
+        drawerToggleHtml = `
+          <button class="toggle-standings-btn" onclick="toggleDrawer(${listData.id})">
+            ${isExpanded ? '▲ Hide Full Standings' : '▼ Show Full Standings (' + rankedItems.length + ' total entries)'}
+          </button>
+        `;
+
+        drawerContentHtml = `
+          <div class="full-standings-drawer ${isExpanded ? 'expanded' : ''}" id="drawer-${listData.id}">
+            <div class="column-box">
+              <div class="column-title" style="color: var(--accent);">
+                <span>📋 Complete Final Standings</span>
+                <span>All Historical Additions</span>
+              </div>
+              <ul class="top5-items">
+                ${fullStandingsHtml}
+              </ul>
+            </div>
+          </div>
+        `;
+      }
+
+      card.innerHTML = `
+        <div class="list-card-header">
+          <span class="list-subject">${listData.subject}</span>
+          <button class="delete-btn" onclick="deleteList(${listData.id})" title="Delete List">&times;</button>
+        </div>
+
+        <div class="side-by-side-grid">
+          <div class="column-box">
+            <div class="column-title title-mobocop">
+              <span>Mobocop's Mindset</span>
+              <span>⭐ Definitive</span>
+            </div>
+            <ul class="top5-items">
+              ${mobocopHtml}
+            </ul>
+          </div>
+
+          <div class="column-box">
+            <div class="column-title title-others">
+              <span>The Others</span>
+              <span>${activeVoting ? '<span class="voting-badge-open">🟢 Voting Live</span>' : '<span class="voting-badge-closed">🔒 Final Top 5 Locked</span>'}</span>
+            </div>
+            <ul class="top5-items">
+              ${othersHtml}
+            </ul>
+
+            ${activeVoting ? `
+              <div class="voting-controls">
+                <input type="text" id="suggestInput-${listData.id}" placeholder="Suggest item & add vote...">
+                <button class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="submitSuggestion(${listData.id})">Add</button>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        ${drawerToggleHtml}
+        ${drawerContentHtml}
+
+        <div class="list-footer">
+          <span>${activeVoting ? 'Voting open today only' : 'Archived Official Results'}</span>
+          <span>${listData.date_added || "Added Recently"}</span>
+        </div>
+      `;
+
+      return card;
+    }
+
+    // Toggle Drawer Expansion for Closed Lists
+    window.toggleDrawer = function(listId) {
+      expandedLists[listId] = !expandedLists[listId];
+      localStorage.setItem("mobocop_expanded_drawers", JSON.stringify(expandedLists));
+      renderAllLists();
+    };
+
+    // Consolidated Vote Handler
+    window.handleVote = async function(itemId, listId, direction) {
+      if (!dbClient) return;
+
+      if (userVotedItems[itemId]) {
+        alert("You have already voted on this item.");
+        return;
+      }
+
+      const targetList = votesMap[listId] || [];
+      const item = targetList.find(v => v.id === itemId);
+      if (!item) return;
+
+      userVotedItems[itemId] = true;
+      localStorage.setItem("mobocop_voted_items", JSON.stringify(userVotedItems));
+
+      item.vote_count += direction;
+      targetList.sort((a, b) => b.vote_count - a.vote_count);
+      renderAllLists();
+
+      await dbClient
+        .from('community_votes')
+        .update({ vote_count: item.vote_count })
+        .eq('id', itemId);
+    };
+
+    // Suggestion Submission with Case-Insensitive Duplicate Check & 5-Item Limit
+    window.submitSuggestion = async function(listId) {
+      if (!dbClient) return;
+      const input = document.getElementById(`suggestInput-${listId}`);
+      const text = input ? input.value.trim() : "";
+      if (!text) return;
+
+      const currentCount = userAdditionsCount[listId] || 0;
+      if (currentCount >= 5) {
+        alert("You have reached the limit of 5 suggestions for this list.");
+        return;
+      }
+      
+      const currentSuggestions = votesMap[listId] || [];
+      const isDuplicate = currentSuggestions.some(item => item.item_text.toLowerCase() === text.toLowerCase());
+
+      if (isDuplicate) {
+        alert("This item has already been suggested by the community.");
+        return;
+      }
+
+      const { data, error } = await dbClient
+        .from('community_votes')
+        .insert([{ list_id: listId, item_text: text, vote_count: 1 }])
+        .select();
+
+      if (!error && data && data.length > 0) {
+        const newItem = data[0];
+
+        userAdditionsCount[listId] = currentCount + 1;
+        localStorage.setItem("mobocop_user_additions", JSON.stringify(userAdditionsCount));
+
+        userVotedItems[newItem.id] = true;
+        localStorage.setItem("mobocop_voted_items", JSON.stringify(userVotedItems));
+
+        if (!votesMap[listId]) votesMap[listId] = [];
+        votesMap[listId].push(newItem);
+        votesMap[listId].sort((a, b) => b.vote_count - a.vote_count);
+        
+        input.value = "";
+        renderAllLists();
+      }
+    };
+
+    // Admin Handlers & Passcode Login
+    const adminTriggerBtn = document.getElementById("adminTriggerBtn");
+    const adminPanel = document.getElementById("adminPanel");
