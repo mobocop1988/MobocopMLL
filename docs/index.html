@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <link rel="shortcut icon" type="image/x-icon" href="favicon2.ico">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mobocop's Master List of Lists</title>
@@ -528,10 +527,10 @@
           <strong>1. Add Additions:</strong> You may suggest up to <strong>5 items</strong> to each active voting list.
         </div>
         <div class="rules-item">
-          <strong>2. Upvote / Downvote:</strong> Vote <strong>👍 Up</strong> on contenders you want in the Top 5, or <strong>👎 Down</strong> on entries you dislike.
+          <strong>2. Upvote / Downvote:</strong> Vote <strong>👍 Up</strong> on contenders you want in the Top 5, or <strong>👎 Down</strong> on entries you dislike. Tied vote counts share the same rank.
         </div>
         <div class="rules-item">
-          <strong>3. Daily Lock-In:</strong> At <strong>midnight closing</strong>, the Top 5 items are locked in for all eternity.
+          <strong>3. Daily Lock-In:</strong> At <strong>midnight closing</strong>, the Top 5 items are locked in for all eternity (including all entries tied for 5th).
         </div>
       </div>
     </div>
@@ -583,7 +582,6 @@
     const RAW_SUPABASE_URL = "https://tozmfbneiasmnxbftlqw.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvem1mYm5laWFzbW54YmZ0bHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzAzMjUsImV4cCI6MjEwMzk0NjMyNX0.-Z6w_lYZ9kmRtUWLK93XHP1aRUEd0NlEYM0qLvZWtNw";
     
-    // Default fallback passcode if not yet configured in database
     let activeAdminPasscode = "1234";
 
     const SUPABASE_URL = RAW_SUPABASE_URL.trim()
@@ -599,7 +597,6 @@
     let votesMap = {};
     let isAdmin = false;
 
-    // Local ballot box & additions tracker
     let userVotedItems = JSON.parse(localStorage.getItem("mobocop_voted_items") || "{}");
     let userAdditionsCount = JSON.parse(localStorage.getItem("mobocop_user_additions") || "{}");
 
@@ -632,7 +629,6 @@
 
     async function loadSettings() {
       try {
-        // Fetch Background
         const { data: bgData } = await dbClient
           .from('site_settings')
           .select('value')
@@ -641,7 +637,6 @@
 
         if (bgData && bgData.value) applyBackground(bgData.value);
 
-        // Fetch Dynamic Admin Passcode
         const { data: passData } = await dbClient
           .from('site_settings')
           .select('value')
@@ -709,10 +704,34 @@
       card.className = isFeatured ? "list-card featured-card" : "list-card";
 
       const activeVoting = isVotingActive(listData.date_added);
-      const allCommunityItems = (votesMap[listData.id] || []).sort((a, b) => b.vote_count - a.vote_count);
       
-      const displayItems = activeVoting ? allCommunityItems : allCommunityItems.slice(0, 5);
+      // Sort items by vote_count descending
+      const sortedCommunityItems = [...(votesMap[listData.id] || [])].sort((a, b) => b.vote_count - a.vote_count);
 
+      // =========================================================================
+      // COMPETITION RANKING CALCULATION (1224 Ranking)
+      // Items with identical vote counts share the exact same rank.
+      // =========================================================================
+      const rankedItems = [];
+      let currentRank = 1;
+
+      for (let i = 0; i < sortedCommunityItems.length; i++) {
+        if (i > 0 && sortedCommunityItems[i].vote_count < sortedCommunityItems[i - 1].vote_count) {
+          currentRank = i + 1;
+        }
+        rankedItems.push({
+          ...sortedCommunityItems[i],
+          rank: currentRank
+        });
+      }
+
+      // If active voting: show all entries
+      // If locked/closed: keep items with rank <= 5 (all tied at rank 5 are included)
+      const displayItems = activeVoting 
+        ? rankedItems 
+        : rankedItems.filter(item => item.rank <= 5);
+
+      // Mobocop's Mindset Items
       const mobocopHtml = listData.items.map((item, i) => `
         <li class="top5-item">
           <span class="rank-badge">${i + 1}</span>
@@ -720,16 +739,17 @@
         </li>
       `).join("");
 
+      // The Others (Community Ranked List)
       let othersHtml = "";
       const slotsCount = Math.max(5, displayItems.length);
 
-      for (let i = 0; i < (activeVoting ? slotsCount : 5); i++) {
+      for (let i = 0; i < slotsCount; i++) {
         const entry = displayItems[i];
         if (entry) {
           const alreadyVoted = !!userVotedItems[entry.id];
           othersHtml += `
             <li class="top5-item">
-              <span class="rank-badge others-badge">${i + 1}</span>
+              <span class="rank-badge others-badge">${entry.rank}</span>
               <span>${entry.item_text}</span>
               <span class="vote-count-tag">${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'}</span>
               <div class="vote-controls">
@@ -751,6 +771,7 @@
             </li>
           `;
         } else if (i < 5) {
+          // Open slot indicator only if fewer than 5 items exist
           othersHtml += `
             <li class="top5-item" style="opacity: 0.4; font-style: italic;">
               <span class="rank-badge others-badge">${i + 1}</span>
@@ -881,7 +902,6 @@
 
     async function promptAdminLogin() {
       if (!isAdmin) {
-        // Refresh latest passcode from db if available
         if (dbClient) {
           const { data } = await dbClient
             .from('site_settings')
